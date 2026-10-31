@@ -59,17 +59,3 @@ npm run dev
 ```bash
 npm run build
 ```
-
----
-
-## 📤 推送到您的 GitHub 仓库
-
-本地 Git 仓库已提交所有最新更改。在您的本地终端运行以下两行命令即可推送到 GitHub：
-
-```bash
-# 1. 关联您的 GitHub 远程仓库 (将 USERNAME 和 REPO 替换为您的仓库名)
-git remote add origin https://github.com/USERNAME/REPO.git
-
-# 2. 推送到 GitHub main 分支
-git push -u origin main
-```
