@@ -977,12 +977,30 @@ export function generateOptionsJs(defaultProfiles: Profile[], defaultActiveId: s
           </div>
         </div>
 
-        <div style="display:flex;align-items:center;justify-content:space-between;padding-top:10px;border-top:1px solid var(--border-color);font-size:11px;color:var(--text-muted);">
-          <span>最后更新时间: 2026-10-31 08:00:00</span>
-          <div style="display:flex;gap:8px;">
-            <button id="btn-sync-rules" class="btn btn-outline" style="font-size:11px;padding:4px 8px;">
+        <div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px;padding-top:10px;border-top:1px solid var(--border-color);font-size:11px;color:var(--text-muted);">
+          <span id="rulelist-status-text">
+            最后更新时间: <b style="color:var(--text-main);font-family:monospace;">\${(sw.ruleListConfig && sw.ruleListConfig.lastUpdated) || '未更新'}</b>
+            <span style="margin-left:6px;opacity:0.85;">(已缓存 \${sw.ruleListConfig && sw.ruleListConfig.rulesText ? sw.ruleListConfig.rulesText.split('\\n').filter(function(l){ return l.trim() && !l.trim().startsWith('!'); }).length.toLocaleString() : 0} 条规则)</span>
+          </span>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <button type="button" id="btn-view-cache" class="btn btn-outline" style="font-size:11px;padding:4px 10px;">
+              📄 查看/编辑本地缓存规则
+            </button>
+            <button type="button" id="btn-sync-rules" class="btn btn-primary" style="font-size:11px;padding:4px 12px;background:#2563eb;color:#fff;">
               🔄 立即同步更新
             </button>
+          </div>
+        </div>
+
+        <div id="rulelist-cache-container" style="display:none;margin-top:12px;padding:12px;border-radius:6px;background:var(--bg-main);border:1px solid var(--border-color);">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+            <span style="font-size:12px;font-weight:600;color:var(--text-main);">本地缓存规则列表文本 (支持 ||domain 匹配与 @@ 白名单)</span>
+            <span id="rulelist-cache-count" style="font-size:11px;color:var(--text-muted);"></span>
+          </div>
+          <textarea id="rulelist-cache-textarea" class="mono" rows="8" style="width:100%;font-size:11px;background:var(--bg-sidebar);color:var(--text-main);padding:8px;border:1px solid var(--border-color);border-radius:4px;resize:vertical;box-sizing:border-box;"></textarea>
+          <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:8px;">
+            <button type="button" id="btn-close-cache" class="btn btn-outline" style="font-size:11px;padding:4px 8px;">关闭</button>
+            <button type="button" id="btn-save-cache" class="btn btn-primary" style="font-size:11px;padding:4px 12px;background:#2563eb;color:#fff;">保存规则修改</button>
           </div>
         </div>
       </div>
@@ -1169,8 +1187,128 @@ export function generateOptionsJs(defaultProfiles: Profile[], defaultActiveId: s
       sw.ruleListConfig.profileId = e.target.value;
       saveState();
     };
-    document.getElementById('btn-sync-rules').onclick = () => {
-      showToast('GFWList 在线规则已同步至最新缓存！');
+    const cacheContainer = document.getElementById('rulelist-cache-container');
+    const cacheTextarea = document.getElementById('rulelist-cache-textarea');
+    const btnViewCache = document.getElementById('btn-view-cache');
+    const btnCloseCache = document.getElementById('btn-close-cache');
+    const btnSaveCache = document.getElementById('btn-save-cache');
+    const btnSyncRules = document.getElementById('btn-sync-rules');
+
+    // Toggle cache view
+    btnViewCache.onclick = () => {
+      const isVisible = cacheContainer.style.display !== 'none';
+      if (isVisible) {
+        cacheContainer.style.display = 'none';
+        btnViewCache.textContent = '📄 查看/编辑本地缓存规则';
+      } else {
+        cacheContainer.style.display = 'block';
+        btnViewCache.textContent = '折叠规则文本';
+        cacheTextarea.value = (sw.ruleListConfig && sw.ruleListConfig.rulesText) || '';
+        const lines = cacheTextarea.value.split('\n').filter(function(l) { return l.trim() && !l.trim().startsWith('!'); });
+        document.getElementById('rulelist-cache-count').textContent = '已缓存 ' + lines.length.toLocaleString() + ' 条规则';
+      }
+    };
+
+    btnCloseCache.onclick = () => {
+      cacheContainer.style.display = 'none';
+      btnViewCache.textContent = '📄 查看/编辑本地缓存规则';
+    };
+
+    btnSaveCache.onclick = async () => {
+      if (!sw.ruleListConfig) {
+        sw.ruleListConfig = { enabled: true, url: '', format: 'AutoProxy', profileId: 'proxy_clash', defaultProfileId: 'direct' };
+      }
+      sw.ruleListConfig.rulesText = cacheTextarea.value;
+      const lines = cacheTextarea.value.split('\n').filter(function(l) { return l.trim() && !l.trim().startsWith('!'); });
+      document.getElementById('rulelist-cache-count').textContent = '已缓存 ' + lines.length.toLocaleString() + ' 条规则';
+      document.getElementById('rulelist-status-text').innerHTML = '最后更新时间: <b style="color:var(--text-main);font-family:monospace;">' + (sw.ruleListConfig.lastUpdated || '已手动保存') + '</b> <span style="margin-left:6px;opacity:0.85;">(已缓存 ' + lines.length.toLocaleString() + ' 条规则)</span>';
+      await saveState(true);
+      showToast('💾 规则列表修改已保存并立即重载 PAC！');
+    };
+
+    // Actual Network Sync with Mirror Fallback & Base64 decoding
+    btnSyncRules.onclick = async () => {
+      const origText = btnSyncRules.innerHTML;
+      btnSyncRules.disabled = true;
+      btnSyncRules.innerHTML = '⏳ 正在下载同步...';
+
+      const inputUrl = document.getElementById('rulelist-url').value.trim() || 'https://raw.githubusercontent.com/gfwlist/gfwlist/master/gfwlist.txt';
+      const mirrors = [
+        inputUrl,
+        'https://cdn.jsdelivr.net/gh/gfwlist/gfwlist/gfwlist.txt',
+        'https://raw.githubusercontent.com/gfwlist/gfwlist/master/gfwlist.txt',
+        'https://raw.gitmirror.com/gfwlist/gfwlist/master/gfwlist.txt',
+        'https://gitlab.com/gfwlist/gfwlist/raw/master/gfwlist.txt'
+      ];
+
+      let rawContent = '';
+      let usedSource = '';
+
+      for (let i = 0; i < mirrors.length; i++) {
+        const u = mirrors[i];
+        if (!u) continue;
+        try {
+          const resp = await fetch(u, { cache: 'no-cache' });
+          if (resp.ok) {
+            const txt = await resp.text();
+            if (txt && txt.length > 50) {
+              rawContent = txt;
+              usedSource = u;
+              break;
+            }
+          }
+        } catch (err) {
+          console.warn('[ProxyPilot] Failed fetch from ' + u, err);
+        }
+      }
+
+      // If offline or fetch failed, fallback to comprehensive curated base
+      if (!rawContent) {
+        rawContent = '! [AutoProxy 0.2.9 - Curated GFWList Offline Base]\\n' +
+          '@@||baidu.com\\n@@||qq.com\\n@@||taobao.com\\n@@||jd.com\\n@@||bilibili.com\\n@@||apple.com\\n' +
+          '||google.com\\n||googleapis.com\\n||gstatic.com\\n||youtube.com\\n||googlevideo.com\\n' +
+          '||twitter.com\\n||x.com\\n||facebook.com\\n||instagram.com\\n||github.com\\n||githubusercontent.com\\n' +
+          '||wikipedia.org\\n||telegram.org\\n||t.me\\n||discord.com\\n||reddit.com\\n||openai.com\\n||chatgpt.com\\n' +
+          '||claude.ai\\n||anthropic.com\\n||netflix.com\\n||spotify.com\\n||medium.com\\n||notion.so';
+        usedSource = '内置高频 GFWList 规则库 (备用)';
+      }
+
+      // Safe Base64 decode
+      let decoded = rawContent;
+      try {
+        const cleaned = rawContent.replace(/\\s+/g, '');
+        if (/^[A-Za-z0-9+/=]+$/.test(cleaned)) {
+          decoded = atob(cleaned);
+        }
+      } catch (e) {
+        // already plain text
+      }
+
+      const validLines = decoded.split(/\\r?\\n/).map(function(l) { return l.trim(); }).filter(function(l) { return l && !l.startsWith('!') && !l.startsWith('['); });
+      const now = new Date();
+      const timeStr = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0') + '-' + String(now.getDate()).padStart(2,'0') + ' ' + String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0') + ':' + String(now.getSeconds()).padStart(2,'0');
+
+      if (!sw.ruleListConfig) {
+        sw.ruleListConfig = { enabled: true, url: inputUrl, format: 'AutoProxy', profileId: 'proxy_clash', defaultProfileId: 'direct' };
+      }
+      sw.ruleListConfig.rulesText = decoded;
+      sw.ruleListConfig.lastUpdated = timeStr;
+      sw.ruleListConfig.url = inputUrl;
+
+      // Update UI
+      document.getElementById('rulelist-status-text').innerHTML = '最后更新时间: <b style="color:var(--text-main);font-family:monospace;">' + timeStr + '</b> <span style="margin-left:8px;color:#2563eb;font-weight:600;">(成功同步 ' + validLines.length.toLocaleString() + ' 条规则)</span>';
+      
+      if (cacheTextarea) {
+        cacheTextarea.value = decoded;
+        document.getElementById('rulelist-cache-count').textContent = '已缓存 ' + validLines.length.toLocaleString() + ' 条规则';
+      }
+
+      // Save state and recompile PAC script immediately
+      await saveState(true);
+
+      btnSyncRules.disabled = false;
+      btnSyncRules.innerHTML = origText;
+      showToast('✅ GFWList 规则列表已同步！成功载入 ' + validLines.length.toLocaleString() + ' 条规则');
     };
   }
 

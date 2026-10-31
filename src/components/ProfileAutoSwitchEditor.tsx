@@ -12,6 +12,7 @@ import {
   HelpCircle
 } from 'lucide-react';
 import { SwitchProfile, Profile, ConditionType, SwitchRule } from '../types/omega';
+import { syncRuleList } from '../utils/ruleListSync';
 
 interface ProfileAutoSwitchEditorProps {
   profile: SwitchProfile;
@@ -97,20 +98,31 @@ export const ProfileAutoSwitchEditor: React.FC<ProfileAutoSwitchEditorProps> = (
     onChange({ ...profile, rules });
   };
 
-  const handleSimulateUpdateRuleList = () => {
+  const [syncFeedback, setSyncFeedback] = useState<string | null>(null);
+
+  const handleUpdateRuleList = async () => {
     setUpdatingList(true);
-    setTimeout(() => {
-      setUpdatingList(false);
+    setSyncFeedback(null);
+    try {
+      const res = await syncRuleList(profile.ruleListConfig?.url);
       if (profile.ruleListConfig) {
         onChange({
           ...profile,
           ruleListConfig: {
             ...profile.ruleListConfig,
-            lastUpdated: new Date().toISOString().replace('T', ' ').slice(0, 19),
+            rulesText: res.text,
+            lastUpdated: res.lastUpdated,
           },
         });
       }
-    }, 700);
+      setSyncFeedback(`✅ 成功同步 ${res.ruleCount.toLocaleString()} 条规则（包含 ${res.domainCount.toLocaleString()} 个域名与 ${res.whitelistCount} 条白名单）`);
+      setTimeout(() => setSyncFeedback(null), 5000);
+    } catch (e: any) {
+      setSyncFeedback(`❌ 同步失败: ${e.message || '网络连接超时'}`);
+      setTimeout(() => setSyncFeedback(null), 5000);
+    } finally {
+      setUpdatingList(false);
+    }
   };
 
   return (
@@ -408,9 +420,18 @@ export const ProfileAutoSwitchEditor: React.FC<ProfileAutoSwitchEditorProps> = (
               </div>
             </div>
 
+            {syncFeedback && (
+              <div className="py-1.5 px-3 rounded-md bg-emerald-50 dark:bg-emerald-950/70 border border-emerald-200 dark:border-emerald-800 text-xs text-emerald-800 dark:text-emerald-200 font-medium">
+                {syncFeedback}
+              </div>
+            )}
+
             <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-100 dark:border-slate-700 text-xs">
               <div className="text-slate-500 dark:text-slate-400">
-                最后更新时间: <span className="font-mono text-slate-700 dark:text-slate-300">{profile.ruleListConfig.lastUpdated || '未更新'}</span>
+                最后更新时间: <span className="font-mono text-slate-700 dark:text-slate-300 font-semibold">{profile.ruleListConfig.lastUpdated || '未更新'}</span>
+                <span className="ml-2 text-slate-400 dark:text-slate-500">
+                  (已缓存 {profile.ruleListConfig.rulesText ? profile.ruleListConfig.rulesText.split('\n').filter(l => l.trim() && !l.trim().startsWith('!')).length.toLocaleString() : 0} 条规则)
+                </span>
               </div>
               <div className="flex items-center gap-2">
                 <button
@@ -424,21 +445,26 @@ export const ProfileAutoSwitchEditor: React.FC<ProfileAutoSwitchEditorProps> = (
 
                 <button
                   type="button"
-                  onClick={handleSimulateUpdateRuleList}
+                  onClick={handleUpdateRuleList}
                   disabled={updatingList}
-                  className="flex items-center gap-1.5 px-3 py-1 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-800 dark:text-slate-200 rounded font-medium transition-colors"
+                  className="flex items-center gap-1.5 px-3 py-1 bg-blue-50 dark:bg-blue-950/50 hover:bg-blue-100 dark:hover:bg-blue-900 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 rounded font-medium transition-colors cursor-pointer disabled:opacity-50"
                 >
-                  <RefreshCw className={`w-3.5 h-3.5 text-slate-500 dark:text-slate-400 ${updatingList ? 'animate-spin' : ''}`} />
-                  <span>{updatingList ? '正在更新同步...' : '立即同步更新'}</span>
+                  <RefreshCw className={`w-3.5 h-3.5 ${updatingList ? 'animate-spin' : ''}`} />
+                  <span>{updatingList ? '正在下载同步中...' : '立即同步更新'}</span>
                 </button>
               </div>
             </div>
 
             {showRuleListEditor && (
               <div className="mt-3">
-                <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">
-                  本地规则列表文本 (支持 ||domain 匹配以及 @@ 白名单直接连接)
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-medium text-slate-600 dark:text-slate-400">
+                    本地规则列表文本 (支持 ||domain 匹配以及 @@ 白名单直接连接)
+                  </label>
+                  <span className="text-[11px] text-slate-400 font-mono">
+                    {profile.ruleListConfig.rulesText ? profile.ruleListConfig.rulesText.split('\n').length.toLocaleString() : 0} 行
+                  </span>
+                </div>
                 <textarea
                   rows={8}
                   value={profile.ruleListConfig.rulesText || ''}

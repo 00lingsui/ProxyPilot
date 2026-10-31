@@ -94,27 +94,40 @@ ${bypassLines || '  // No bypass rules configured'}
       }
     }
 
-    // AutoProxy list snippet
+    // AutoProxy / GFWList segment (Fast hash table lookup + whitelist support)
     let ruleListSnippet = '';
     if (sw.ruleListConfig?.enabled && sw.ruleListConfig.rulesText) {
       const targetProf = allProfiles.find(p => p.id === sw.ruleListConfig?.profileId);
       const listRet = targetProf ? formatPacStatement(targetProf) : 'DIRECT';
-      const sampleDomains = sw.ruleListConfig.rulesText
-        .split('\n')
-        .map(l => l.trim())
-        .filter(l => l.startsWith('||'))
-        .map(l => sanitizeToAscii(l.slice(2).replace(/^\/+/, '')))
-        .filter(Boolean)
-        .slice(0, 30);
+
+      const lines = sw.ruleListConfig.rulesText.split(/\r?\n/);
+      const proxyMap: Record<string, number> = {};
+      const whiteMap: Record<string, number> = {};
+
+      for (let li = 0; li < lines.length; li++) {
+        const l = lines[li].trim();
+        if (!l || l.startsWith('!') || l.startsWith('[')) continue;
+        if (l.startsWith('@@')) {
+          const clean = sanitizeToAscii(l.replace(/^@@(\|\|)?/, '').replace(/^https?:\/\//, '').split('/')[0].trim().toLowerCase());
+          if (clean && !clean.includes('*') && !clean.includes('^')) whiteMap[clean] = 1;
+        } else if (l.startsWith('||')) {
+          const clean = sanitizeToAscii(l.slice(2).replace(/^\/+/, '').split('/')[0].trim().toLowerCase());
+          if (clean && !clean.includes('*') && !clean.includes('^')) proxyMap[clean] = 1;
+        } else if (!l.startsWith('|') && !l.startsWith('/') && l.includes('.') && !l.includes(' ') && !l.includes('*')) {
+          const clean = sanitizeToAscii(l.split('/')[0].trim().toLowerCase());
+          if (clean) proxyMap[clean] = 1;
+        }
+      }
 
       ruleListSnippet = `
-  // Online Rule List items
-  var ruleListDomains = ${JSON.stringify(sampleDomains)};
-  for (var i = 0; i < ruleListDomains.length; i++) {
-    var d = ruleListDomains[i];
-    if (host === d || dnsDomainIs(host, "." + d)) {
-      return "${listRet}";
-    }
+  // --- GFWList / Online Rule List Matcher ---
+  var gfwWhite = ${JSON.stringify(whiteMap)};
+  var gfwProxy = ${JSON.stringify(proxyMap)};
+  if (matchDomainMap(host, gfwWhite)) {
+    return "DIRECT";
+  }
+  if (matchDomainMap(host, gfwProxy)) {
+    return "${listRet}";
   }`;
     }
 
@@ -137,9 +150,18 @@ ${ruleListSnippet}
   return "${defaultPacRet}";
 }
 
-// Fallback helper in case browser engine lacks dnsDomainIs
-function dnsDomainIs(host, domain) {
-  return host.length >= domain.length && host.substring(host.length - domain.length) === domain;
+// Fast domain lookup supporting exact and subdomain matches
+function matchDomainMap(h, map) {
+  if (!h || !map) return false;
+  h = h.toLowerCase();
+  if (map[h]) return true;
+  var dot = h.indexOf('.');
+  while (dot !== -1) {
+    var parent = h.substring(dot + 1);
+    if (map[parent]) return true;
+    dot = h.indexOf('.', dot + 1);
+  }
+  return false;
 }
 `;
   }

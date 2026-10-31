@@ -17,7 +17,7 @@ export async function generateExtensionZip(profiles: Profile[], activeProfileId:
     manifest_version: 3,
     name: "ProxyPilot",
     short_name: "ProxyPilot",
-    version: "1.0.0",
+    version: "1.0.1",
     description: "Lightweight, powerful browser proxy automation suite for desktop & mobile (Chrome, Edge, Kiwi).",
     permissions: [
       "proxy",
@@ -146,22 +146,30 @@ function buildPacScriptForProfile(target, allProfiles) {
     if (sw.ruleListConfig && sw.ruleListConfig.enabled && sw.ruleListConfig.rulesText) {
       const listTarget = allProfiles.find(p => p.id === sw.ruleListConfig.profileId);
       const listRet = formatPacStatement(listTarget);
-      const sampleDomains = sw.ruleListConfig.rulesText
-        .split('\\n')
-        .map(l => l.trim())
-        .filter(l => l.startsWith('||'))
-        .map(l => toPureAscii(l.slice(2).replace(/^\\/+/, '')))
-        .filter(Boolean)
-        .slice(0, 30);
 
-      ruleListBlock = '\\n  // GFWList / AutoProxy Segment\\n' +
-        '  var listDomains = ' + JSON.stringify(sampleDomains) + ';\\n' +
-        '  for (var k = 0; k < listDomains.length; k++) {\\n' +
-        '    var d = listDomains[k];\\n' +
-        '    if (host === d || (host.length > d.length && host.substring(host.length - d.length - 1) === "." + d)) {\\n' +
-        '      return "' + listRet + '";\\n' +
-        '    }\\n' +
-        '  }\\n';
+      const rLines = sw.ruleListConfig.rulesText.split(/\r?\n/);
+      const proxyMap: Record<string, number> = {};
+      const whiteMap: Record<string, number> = {};
+      for (let li = 0; li < rLines.length; li++) {
+        const l = rLines[li].trim();
+        if (!l || l.charAt(0) === '!' || l.charAt(0) === '[') continue;
+        if (l.indexOf('@@') === 0) {
+          const clean = toPureAscii(l.replace(/^@@(\|\|)?/, '').replace(/^https?:\/\//, '').split('/')[0].trim().toLowerCase());
+          if (clean && clean.indexOf('*') === -1 && clean.indexOf('^') === -1) whiteMap[clean] = 1;
+        } else if (l.indexOf('||') === 0) {
+          const clean = toPureAscii(l.substring(2).replace(/^\/+/, '').split('/')[0].trim().toLowerCase());
+          if (clean && clean.indexOf('*') === -1 && clean.indexOf('^') === -1) proxyMap[clean] = 1;
+        } else if (l.charAt(0) !== '|' && l.charAt(0) !== '/' && l.indexOf('.') !== -1 && l.indexOf(' ') === -1 && l.indexOf('*') === -1) {
+          const clean = toPureAscii(l.split('/')[0].trim().toLowerCase());
+          if (clean) proxyMap[clean] = 1;
+        }
+      }
+
+      ruleListBlock = '\\n  // GFWList / Online Rule List Segment (Fast Hash Map)\\n' +
+        '  var gfwWhite = ' + JSON.stringify(whiteMap) + ';\\n' +
+        '  var gfwProxy = ' + JSON.stringify(proxyMap) + ';\\n' +
+        '  if (matchDomainMap(host, gfwWhite)) return "DIRECT";\\n' +
+        '  if (matchDomainMap(host, gfwProxy)) return "' + listRet + '";\\n';
     }
 
     return '// ProxyPilot PAC Script - Auto Switch\\n' +
@@ -174,6 +182,18 @@ function buildPacScriptForProfile(target, allProfiles) {
       ruleListBlock +
       '\\n  // Default fallback\\n' +
       '  return "' + defaultRet + '";\\n' +
+      '}\\n\\n' +
+      'function matchDomainMap(h, map) {\\n' +
+      '  if (!h || !map) return false;\\n' +
+      '  h = h.toLowerCase();\\n' +
+      '  if (map[h]) return true;\\n' +
+      '  var dot = h.indexOf(".");\\n' +
+      '  while (dot !== -1) {\\n' +
+      '    var parent = h.substring(dot + 1);\\n' +
+      '    if (map[parent]) return true;\\n' +
+      '    dot = h.indexOf(".", dot + 1);\\n' +
+      '  }\\n' +
+      '  return false;\\n' +
       '}';
   }
 
