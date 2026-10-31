@@ -1,11 +1,75 @@
-<div align="center">
+# ProxyPilot - 现代浏览器智能代理与自动化分流扩展套件
 
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
+> 一款基于 Chromium Manifest V3 架构打造的现代代理管理扩展与规则路由工具，默认端口 **7897**，致敬经典 SwitchyOmega。
 
-  <h1>Built with AI Studio</h2>
+---
 
-  <p>The fastest path from prompt to production with Gemini.</p>
+## 🌟 核心特性
 
-  <a href="https://aistudio.google.com/apps">Start building</a>
+- 🚀 **全新命名 ProxyPilot**：简洁大气的现代化代理导航与自动化管理工具。
+- ⚡ **默认 7897 端口**：全面适配现代 Clash、Mihomo、Sing-box、Clash Verge 等混合代理端口。
+- 📱 **多端全平台支持 (桌面 & 手机端)**：
+  - 完美适配电脑端 **Google Chrome / Microsoft Edge / Brave / Firefox**。
+  - 完美适配安卓移动端 **Kiwi Browser**（免解压直接加载 `.zip` 安装！）。
+- 🌓 **深色 / 浅色双主题无缝切换**：遵循 WCAG 对比度设计规范，支持随系统自动匹配或一键手动切换。
+- 🔌 **一键导出真实浏览器插件**：内置 MV3 插件打包生成器，一键下载 `.zip` 即装即用。
+- 🎯 **强大的情景模式 (Profiles)**：
+  - **直接连接 (Direct)** & **系统代理 (System)**
+  - **固定代理服务器 (Proxy Profile)**：支持 HTTP / HTTPS / SOCKS4 / SOCKS5，带认证与 Bypass List 不代理名单。
+  - **自动切换模式 (Auto Switch)**：支持域名通配符（`*.google.com`）、网址通配符、正则表达式与关键词分流；支持在线规则列表（AutoProxy / GFWList）。
+  - **PAC 智能脚本 (PAC Profile)**：动态生成与执行标准 `FindProxyForURL(url, host)` 脚本。
+- 🧪 **交互式路由分流模拟器 (Route Simulator)**：
+  - 单 URL 请求全链路拓扑追踪（发起 -> 生效情景 -> 规则匹配判定 -> 目标代理出口 -> 延迟预估）。
+  - 批量 URL 矩阵压力测试。
+- 📦 **兼容备份与恢复**：一键导入与导出 `.bak` JSON 文件，预设 Clash / V2Ray / 移动端工作流。
 
-</div>
+---
+
+## 📱 安卓手机端 (Kiwi Browser / Edge Android) 安装指南
+
+1. 在手机上安装并打开 **Kiwi Browser**。
+2. 点击右上角菜单按钮 `⋮` -> 选择 **「扩展程序」(Extensions)**。
+3. 勾选右上角 **「开发者模式」(Developer Mode)** 开关。
+4. 点击 **`+ (from .zip / .crx / .user.js)`** 按钮。
+5. 选择刚下载的 `ProxyPilot-Chrome-Extension-v1.0.0.zip`（Kiwi 原生支持直接安装 ZIP，**无需解压**！）。
+6. 安装完成后，在浏览器菜单中点击 ProxyPilot 即可随时分流或添加规则！
+
+---
+
+## 💻 电脑端 (Chrome / Edge / Firefox) 安装指南
+
+1. **解压此 ZIP 压缩包** 到本地文件夹（例如 `D:\ProxyPilot-Extension`）。
+2. 打开浏览器扩展管理页：
+   - Chrome: `chrome://extensions`
+   - Edge: `edge://extensions`
+3. 开启右上角 **"开发者模式"**。
+4. 点击 **"加载已解压的扩展程序"**，选择解压出的文件夹即可。
+
+---
+
+## 🛠️ 本地运行开发
+
+```bash
+npm install
+npm run dev
+```
+
+构建生产版本：
+
+```bash
+npm run build
+```
+
+---
+
+## 📤 推送到您的 GitHub 仓库
+
+本地 Git 仓库已提交所有最新更改。在您的本地终端运行以下两行命令即可推送到 GitHub：
+
+```bash
+# 1. 关联您的 GitHub 远程仓库 (将 USERNAME 和 REPO 替换为您的仓库名)
+git remote add origin https://github.com/USERNAME/REPO.git
+
+# 2. 推送到 GitHub main 分支
+git push -u origin main
+```

@@ -1,0 +1,6 @@
+{
+  "name": "OmegaSwitch - Browser Proxy Manager & Extension",
+  "description": "A powerful browser proxy management tool and extension suite modeled after SwitchyOmega with visual rule routing, PAC generator, and live simulation.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
