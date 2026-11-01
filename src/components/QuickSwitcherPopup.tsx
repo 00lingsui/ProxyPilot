@@ -118,6 +118,30 @@ export const QuickSwitcherPopup: React.FC<QuickSwitcherPopupProps> = ({
               命中规则: <code className="font-mono">{simulation.matchedRule.pattern}</code>
             </div>
           )}
+          {/* Per-Tab Quick Override Control */}
+          <div className="pt-1">
+            <div className="p-2.5 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50/60 dark:bg-amber-950/40 text-xs space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="font-semibold text-amber-900 dark:text-amber-200 text-[11px] flex items-center gap-1">
+                  ⚡ 单标签页临时接管
+                </span>
+                <span className="text-[10px] text-amber-700 dark:text-amber-300 font-mono">Alt+Shift+X</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    onSelectActiveProfile(activeProfileId === 'direct' ? 'proxy_clash' : 'direct');
+                    setAddedToast(activeProfileId === 'direct' ? '已临时接管：该标签页走代理 (7897)' : '已临时接管：该标签页直连绕过');
+                    setTimeout(() => setAddedToast(null), 3000);
+                  }}
+                  className="flex-1 py-1 px-2 rounded bg-amber-500 hover:bg-amber-600 text-white font-medium text-[11px] text-center transition-colors"
+                >
+                  {simulation.isDirect ? '临时对此网页走代理 (7897)' : '临时对此网页直连 (绕过规则)'}
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* Quick Notification Toast */}
@@ -130,8 +154,9 @@ export const QuickSwitcherPopup: React.FC<QuickSwitcherPopupProps> = ({
 
         {/* Profiles List */}
         <div className="space-y-1">
-          <div className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider px-1">
-            选择生效情景模式
+          <div className="flex items-center justify-between text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider px-1">
+            <span>选择生效情景模式</span>
+            <span className="text-[10px] lowercase font-normal text-slate-400">循环快捷键: Alt+Shift+X</span>
           </div>
 
           <div className="space-y-1 max-h-56 overflow-y-auto">

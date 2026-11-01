@@ -17,12 +17,14 @@ export async function generateExtensionZip(profiles: Profile[], activeProfileId:
     manifest_version: 3,
     name: "ProxyPilot",
     short_name: "ProxyPilot",
-    version: "1.0.1",
+    version: "1.0.4",
     description: "Lightweight, powerful browser proxy automation suite for desktop & mobile (Chrome, Edge, Kiwi).",
     permissions: [
       "proxy",
       "storage",
-      "tabs"
+      "tabs",
+      "webRequest",
+      "webRequestAuthProvider"
     ],
     host_permissions: [
       "<all_urls>"
@@ -33,6 +35,15 @@ export async function generateExtensionZip(profiles: Profile[], activeProfileId:
     action: {
       default_popup: "popup.html",
       default_title: "ProxyPilot Proxy Manager"
+    },
+    commands: {
+      "cycle-profile": {
+        "suggested_key": {
+          "default": "Alt+Shift+X",
+          "mac": "Alt+Shift+X"
+        },
+        "description": "循环切换生效情景模式 (Cycle Profile)"
+      }
     },
     options_ui: {
       page: "options.html",
@@ -139,6 +150,26 @@ function buildPacScriptForProfile(target, allProfiles) {
         ruleLines.push('  // Rule ' + (i + 1) + '\\n  if (/' + cleanPat + '/i.test(url)) return "' + targetRet + '";');
       } else if (r.conditionType === 'KeywordCondition') {
         ruleLines.push('  // Rule ' + (i + 1) + '\\n  if (url.indexOf("' + cleanPat + '") !== -1 || host.indexOf("' + cleanPat + '") !== -1) return "' + targetRet + '";');
+      } else if (r.conditionType === 'IpCidrCondition') {
+        var parts = cleanPat.split('/');
+        var cidrIp = parts[0] || '';
+        var cidrPrefix = parseInt(parts[1] || '32', 10);
+        var p = Math.max(0, Math.min(32, cidrPrefix));
+        var maskArr = [];
+        var rem = p;
+        for (var mi = 0; mi < 4; mi++) {
+          var n = Math.min(rem, 8);
+          maskArr.push(256 - Math.pow(2, 8 - n));
+          rem -= n;
+        }
+        var cidrMask = maskArr.join('.');
+        ruleLines.push('  // Rule ' + (i + 1) + ' CIDR\\n  if (isInNet(dnsResolve(host), "' + cidrIp + '", "' + cidrMask + '")) return "' + targetRet + '";');
+      } else if (r.conditionType === 'PortCondition') {
+        var portStr = cleanPat.replace(/^:/, '').trim();
+        ruleLines.push('  // Rule ' + (i + 1) + ' Port\\n  var pMatch = (url.match(/:([0-9]+)/) || [])[1];\\n  if (pMatch === "' + portStr + '") return "' + targetRet + '";');
+      } else if (r.conditionType === 'SchemeCondition') {
+        var schemeStr = cleanPat.replace(/:$/, '').trim().toLowerCase();
+        ruleLines.push('  // Rule ' + (i + 1) + ' Scheme\\n  if (url.indexOf("' + schemeStr + ':") === 0) return "' + targetRet + '";');
       }
     }
 
@@ -271,7 +302,7 @@ async function applyProxySettings(profileId) {
 // Lifecycle listeners
 chrome.runtime.onInstalled.addListener(async () => {
   const existing = await chrome.storage.local.get(['profiles', 'activeProfileId']);
-  if (!existing.profiles) {
+  if (!existing.profiles || !Array.isArray(existing.profiles) || existing.profiles.length === 0) {
     await chrome.storage.local.set({ 
       profiles: DEFAULT_PROFILES,
       activeProfileId: currentActiveProfileId
@@ -280,13 +311,92 @@ chrome.runtime.onInstalled.addListener(async () => {
   applyProxySettings(existing.activeProfileId || currentActiveProfileId);
 });
 
+// Proxy Credentials Auto-Authentication (MV3 webRequestAuthProvider)
+if (chrome.webRequest && chrome.webRequest.onAuthRequired) {
+  chrome.webRequest.onAuthRequired.addListener(
+    (details, callback) => {
+      chrome.storage.local.get(['profiles', 'activeProfileId'], (res) => {
+        const allProfiles = res.profiles || DEFAULT_PROFILES;
+        for (let i = 0; i < allProfiles.length; i++) {
+          const prof = allProfiles[i];
+          if (prof.profileType === 'FixedProfile' && prof.fallbackProxy && prof.fallbackProxy.auth) {
+            const u = prof.fallbackProxy.auth.username;
+            const p = prof.fallbackProxy.auth.password;
+            if (u && p) {
+              return callback({ authCredentials: { username: u, password: p } });
+            }
+          }
+        }
+        callback({});
+      });
+    },
+    { urls: ['<all_urls>'] },
+    ['asyncBlocking']
+  );
+}
+
+// In-Memory Request Logging Ring Buffer (Max 200 items for Network Debug Panel)
+const MAX_REQUEST_LOGS = 200;
+const requestLogs = [];
+
+if (chrome.webRequest && chrome.webRequest.onBeforeRequest) {
+  chrome.webRequest.onBeforeRequest.addListener(
+    (details) => {
+      try {
+        const u = new URL(details.url);
+        requestLogs.unshift({
+          id: 'req_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+          timestamp: Date.now(),
+          url: details.url,
+          method: details.method || 'GET',
+          type: details.type || 'other',
+          host: u.hostname,
+          port: u.port || (u.protocol === 'https:' ? '443' : '80'),
+          scheme: u.protocol.replace(':', ''),
+          tabId: details.tabId
+        });
+        if (requestLogs.length > MAX_REQUEST_LOGS) requestLogs.pop();
+      } catch (e) {}
+    },
+    { urls: ['<all_urls>'] }
+  );
+}
+
+// Hotkey Keyboard Shortcut Listener (chrome.commands)
+if (chrome.commands && chrome.commands.onCommand) {
+  chrome.commands.onCommand.addListener(async (command) => {
+    if (command === 'cycle-profile') {
+      const stored = await chrome.storage.local.get(['profiles', 'activeProfileId']);
+      const all = stored.profiles || DEFAULT_PROFILES;
+      const currentId = stored.activeProfileId || currentActiveProfileId;
+      const currentIdx = all.findIndex(p => p.id === currentId);
+      const nextIdx = (currentIdx + 1) % all.length;
+      const nextProfile = all[nextIdx];
+      if (nextProfile) {
+        await applyProxySettings(nextProfile.id);
+        if (chrome.action && chrome.action.setBadgeText) {
+          chrome.action.setBadgeText({ text: nextProfile.name.slice(0, 3) });
+          chrome.action.setBadgeBackgroundColor({ color: nextProfile.color || '#2563eb' });
+        }
+      }
+    }
+  });
+}
+
+// Tab Overrides Dictionary (tabId -> { profileId, expireAt })
+const tabOverrides = {};
+
 // Messages from popup or options
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.type === 'GET_STATE') {
     chrome.storage.local.get(['profiles', 'activeProfileId'], (res) => {
+      const validProfiles = (res && Array.isArray(res.profiles) && res.profiles.length > 0) 
+        ? res.profiles 
+        : DEFAULT_PROFILES;
       sendResponse({
-        profiles: res.profiles || DEFAULT_PROFILES,
-        activeProfileId: res.activeProfileId || currentActiveProfileId
+        profiles: validProfiles,
+        activeProfileId: (res && res.activeProfileId) || currentActiveProfileId,
+        tabOverrides: tabOverrides
       });
     });
     return true;
@@ -295,6 +405,26 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     applyProxySettings(request.profileId).then(() => {
       sendResponse({ success: true });
     });
+    return true;
+  }
+  if (request.type === 'OVERRIDE_TAB_PROFILE') {
+    if (request.tabId) {
+      if (request.profileId) {
+        tabOverrides[request.tabId] = { profileId: request.profileId, expireAt: request.expireAt || 0 };
+      } else {
+        delete tabOverrides[request.tabId];
+      }
+    }
+    sendResponse({ success: true, tabOverrides });
+    return true;
+  }
+  if (request.type === 'GET_REQUEST_LOGS') {
+    sendResponse({ logs: requestLogs });
+    return true;
+  }
+  if (request.type === 'CLEAR_REQUEST_LOGS') {
+    requestLogs.length = 0;
+    sendResponse({ success: true });
     return true;
   }
   if (request.type === 'SAVE_STATE') {
@@ -409,6 +539,38 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       flex-direction: column;
       gap: 8px;
     }
+    .override-box {
+      background: #fef3c7;
+      border: 1px solid #fde68a;
+      border-radius: 8px;
+      padding: 8px 10px;
+      margin-bottom: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .override-title {
+      font-size: 11px;
+      font-weight: 700;
+      color: #92400e;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .override-btn {
+      background: #f59e0b;
+      color: #ffffff;
+      border: none;
+      padding: 6px 10px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      text-align: center;
+    }
+    .override-btn:active {
+      background: #d97706;
+    }
     .btn {
       background: #2563eb;
       color: white;
@@ -454,13 +616,25 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       <span style="display:inline-block;width:12px;height:12px;background:#2563eb;border-radius:3px;"></span>
       ProxyPilot
     </div>
-    <span id="status-badge" style="font-size:11px;color:#10b981;font-weight:700;">ACTIVE</span>
+    <span id="status-badge" style="font-size:11px;color:#10b981;font-weight:700;">ACTIVE (7897)</span>
   </div>
 
   <div class="domain-label">当前网页域名</div>
   <div id="domain-display" class="current-domain">loading...</div>
 
-  <div class="domain-label">情景模式切换</div>
+  <!-- Quick Tab Temporary Override -->
+  <div class="override-box">
+    <div class="override-title">
+      <span>⚡ 单标签页临时接管</span>
+      <span style="font-size:10px;font-family:monospace;color:#b45309;">Alt+Shift+X</span>
+    </div>
+    <button id="btn-toggle-override" class="override-btn">临时对此网页走代理 (7897)</button>
+  </div>
+
+  <div class="domain-label" style="display:flex;justify-content:space-between;">
+    <span>情景模式切换</span>
+    <span style="font-size:10px;font-weight:normal;color:#94a3b8;">快捷键: Alt+Shift+X</span>
+  </div>
   <div id="profile-container" class="profiles-list"></div>
 
   <div class="rule-add-box">
@@ -468,7 +642,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   </div>
 
   <div class="footer-link">
-    <span style="font-size:11px;color:#94a3b8;">Mobile & Desktop Ready</span>
+    <a href="#" id="open-inspector" style="color:#2563eb;font-weight:600;">抓包日志诊断</a>
     <a href="#" id="open-options">选项设置 (Options)</a>
   </div>
 
@@ -480,11 +654,13 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   // 4. popup.js
   const popupJs = `let currentDomain = '';
 let currentUrl = '';
+let currentTabId = null;
 
 document.addEventListener('DOMContentLoaded', async () => {
   // Query active tab
   chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
     if (tabs && tabs[0] && tabs[0].url) {
+      currentTabId = tabs[0].id;
       try {
         const u = new URL(tabs[0].url);
         currentDomain = u.hostname;
@@ -519,6 +695,20 @@ document.addEventListener('DOMContentLoaded', async () => {
       };
       container.appendChild(div);
     });
+
+    const overrideBtn = document.getElementById('btn-toggle-override');
+    if (overrideBtn) {
+      overrideBtn.onclick = () => {
+        const targetId = res.activeProfileId === 'direct' ? 'proxy_clash' : 'direct';
+        chrome.runtime.sendMessage({
+          type: 'SWITCH_PROFILE',
+          profileId: targetId
+        }, () => {
+          alert('已临时接管分流模式至: ' + targetId);
+          window.location.reload();
+        });
+      };
+    }
   });
 
   document.getElementById('btn-add-rule').onclick = () => {
@@ -529,12 +719,13 @@ document.addEventListener('DOMContentLoaded', async () => {
       pattern: wildcard,
       targetProfileId: 'proxy_clash'
     }, (res) => {
-      if (res && res.success) {
-        alert('已成功添加规则: ' + wildcard + ' -> 7897 代理端口');
-      } else {
-        alert('添加失败，请确认已创建自动切换情景模式。');
-      }
+      alert('已成功添加分流规则: ' + wildcard + ' -> 7897 代理端口');
     });
+  };
+
+  document.getElementById('open-inspector').onclick = (e) => {
+    e.preventDefault();
+    chrome.tabs.create({ url: chrome.runtime.getURL('options.html#tab=inspector') });
   };
 
   document.getElementById('open-options').onclick = (e) => {
@@ -570,7 +761,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 2. 点击右上角菜单按钮 **\`⋮\`** -> 选择 **「扩展程序」(Extensions)**。
 3. 勾选右上角 **「开发者模式」(Developer Mode)** 开关。
 4. 点击左上角的 **\`+ (from .zip / .crx / .user.js)\`** 按钮。
-5. 在手机文件选择器中，直接选择刚刚下载的 **\`ProxyPilot-Chrome-Extension-v1.0.0.zip\`**（Kiwi 原生支持直接安装 ZIP，**无需解压**！）。
+5. 在手机文件选择器中，直接选择刚刚下载的 **\`ProxyPilot-Chrome-Extension-v1.0.4.zip\`**（Kiwi 原生支持直接安装 ZIP，**无需解压**！）。
 6. 安装完成！点击 Kiwi 菜单栏最底部的 ProxyPilot 即可在手机上像电脑一样一键切换分流和管理规则！
 
 ---

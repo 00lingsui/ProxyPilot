@@ -91,6 +91,26 @@ ${bypassLines || '  // No bypass rules configured'}
         ruleCodeBlocks.push(`${comment}\n  if (/${cleanPattern}/i.test(url)) {\n    return "${targetRet}";\n  }`);
       } else if (rule.conditionType === 'KeywordCondition') {
         ruleCodeBlocks.push(`${comment}\n  if (url.indexOf("${cleanPattern}") !== -1 || host.indexOf("${cleanPattern}") !== -1) {\n    return "${targetRet}";\n  }`);
+      } else if (rule.conditionType === 'IpCidrCondition') {
+        const parts = cleanPattern.split('/');
+        const cidrIp = parts[0]?.trim() || '';
+        const cidrPrefix = parseInt(parts[1]?.trim() || '32', 10);
+        const p = Math.max(0, Math.min(32, cidrPrefix));
+        const maskArr = [];
+        let rem = p;
+        for (let mi = 0; mi < 4; mi++) {
+          const n = Math.min(rem, 8);
+          maskArr.push(256 - Math.pow(2, 8 - n));
+          rem -= n;
+        }
+        const cidrMask = maskArr.join('.');
+        ruleCodeBlocks.push(`${comment}\n  if (isInNet(dnsResolve(host), "${cidrIp}", "${cidrMask}")) {\n    return "${targetRet}";\n  }`);
+      } else if (rule.conditionType === 'PortCondition') {
+        const portStr = cleanPattern.replace(/^:/, '').trim();
+        ruleCodeBlocks.push(`${comment}\n  var pMatch = (url.match(/:([0-9]+)/) || [])[1];\n  if (pMatch === "${portStr}") {\n    return "${targetRet}";\n  }`);
+      } else if (rule.conditionType === 'SchemeCondition') {
+        const schemeStr = cleanPattern.replace(/:$/, '').trim().toLowerCase();
+        ruleCodeBlocks.push(`${comment}\n  if (url.indexOf("${schemeStr}:") === 0) {\n    return "${targetRet}";\n  }`);
       }
     }
 

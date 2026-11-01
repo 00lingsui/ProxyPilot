@@ -23,6 +23,8 @@ import { ProfileVirtualEditor } from './components/ProfileVirtualEditor';
 import { QuickSwitcherPopup } from './components/QuickSwitcherPopup';
 import { RouteSimulator } from './components/RouteSimulator';
 import { PacCodeViewer } from './components/PacCodeViewer';
+import { RequestInspector } from './components/RequestInspector';
+import { CloudSyncView } from './components/CloudSyncView';
 import { ExtensionPackagerModal } from './components/ExtensionPackagerModal';
 import { BackupModal } from './components/BackupModal';
 import { NewProfileModal } from './components/NewProfileModal';
@@ -47,8 +49,15 @@ export default function App() {
   const [profiles, setProfiles] = useState<Profile[]>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) return JSON.parse(saved);
-    } catch {}
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
+      }
+    } catch (e) {
+      console.warn('[ProxyPilot] Failed loading saved profiles from localStorage, using defaults:', e);
+    }
     return DEFAULT_PROFILES;
   });
 
@@ -61,7 +70,7 @@ export default function App() {
   });
 
   const [selectedProfileId, setSelectedProfileId] = useState<string>('auto_switch');
-  const [currentTab, setCurrentTab] = useState<'profiles' | 'simulator' | 'pac' | 'backup'>('profiles');
+  const [currentTab, setCurrentTab] = useState<'profiles' | 'inspector' | 'simulator' | 'pac' | 'cloud' | 'backup'>('profiles');
 
   // Modals & Popups
   const [isPopupOpen, setIsPopupOpen] = useState(false); // default closed so mobile isn't blocked on load
@@ -309,6 +318,33 @@ export default function App() {
                     </div>
                   </div>
                 )}
+
+                {/* Fallback if profile not recognized */}
+                {!['FixedProfile', 'SwitchProfile', 'PacProfile', 'VirtualProfile', 'DirectProfile', 'SystemProfile'].includes(selectedProfile.profileType) && (
+                  <div className="p-8 text-center space-y-4">
+                    <p className="text-slate-500">情景模式数据异常或未配置。</p>
+                    <button
+                      onClick={handleResetProfiles}
+                      className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg"
+                    >
+                      恢复默认预设情景
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {currentTab === 'profiles' && !selectedProfile && (
+              <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-8 text-center space-y-4 shadow-xs">
+                <p className="text-sm text-slate-600 dark:text-slate-400 font-medium">
+                  未检测到情景模式或本地存储已被重置。
+                </p>
+                <button
+                  onClick={handleResetProfiles}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg shadow-xs"
+                >
+                  一键载入默认预设情景模式 (7897 端口)
+                </button>
               </div>
             )}
 
@@ -318,6 +354,36 @@ export default function App() {
                 profiles={profiles}
                 activeProfileId={activeProfileId}
                 setActiveProfileId={setActiveProfileId}
+              />
+            )}
+
+            {/* View: Request Inspector (Real-time network traffic & debug) */}
+            {currentTab === 'inspector' && (
+              <RequestInspector
+                profiles={profiles}
+                activeProfileId={activeProfileId}
+                onAddRule={(pattern, targetProfileId) => {
+                  handleAddRuleToAutoSwitchFromPopup(pattern, targetProfileId);
+                  showToast(`已一键添加分流规则: ${pattern}`);
+                }}
+              />
+            )}
+
+            {/* View: Cloud Sync & Clash Rules */}
+            {currentTab === 'cloud' && (
+              <CloudSyncView
+                profiles={profiles}
+                activeProfileId={activeProfileId}
+                onImportProfiles={(imported) => {
+                  setProfiles(imported);
+                  setSelectedProfileId(imported[0]?.id || 'direct');
+                  showToast(`成功从云端导入 ${imported.length} 个情景模式`);
+                }}
+                onUpdateProfiles={(updated) => {
+                  setProfiles(updated);
+                  setHasUnsavedChanges(true);
+                  showToast('已更新情景模式规则');
+                }}
               />
             )}
 

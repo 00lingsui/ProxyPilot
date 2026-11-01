@@ -13,36 +13,46 @@ export interface SyncResult {
   error?: string;
 }
 
-// Built-in list of fallback mirrors in case raw.githubusercontent.com is blocked
+// Built-in list of fast, reliable CDN and mirror endpoints
 export const RULE_LIST_MIRRORS = [
-  'https://cdn.jsdelivr.net/gh/gfwlist/gfwlist/gfwlist.txt',
-  'https://raw.githubusercontent.com/gfwlist/gfwlist/master/gfwlist.txt',
+  'https://cdn.jsdelivr.net/gh/gfwlist/gfwlist@master/gfwlist.txt',
+  'https://fastly.jsdelivr.net/gh/gfwlist/gfwlist@master/gfwlist.txt',
   'https://raw.gitmirror.com/gfwlist/gfwlist/master/gfwlist.txt',
+  'https://raw.githubusercontent.com/gfwlist/gfwlist/master/gfwlist.txt',
   'https://gitlab.com/gfwlist/gfwlist/raw/master/gfwlist.txt',
 ];
 
-// Curated top domains preset for offline or emergency fallback
+// Curated top domains preset for fast offline or emergency fallback
 export const CURATED_TOP_DOMAINS = [
-  'google.com', 'google.co.jp', 'google.com.hk', 'googleapis.com', 'googleusercontent.com', 'gstatic.com',
-  'youtube.com', 'ytimg.com', 'googlevideo.com', 'youtu.be',
-  'twitter.com', 'x.com', 'twimg.com', 't.co',
-  'facebook.com', 'fbcdn.net', 'instagram.com', 'cdninstagram.com', 'whatsapp.com', 'threads.net',
-  'github.com', 'githubassets.com', 'githubusercontent.com',
-  'wikipedia.org', 'wikimedia.org',
-  'telegram.org', 't.me', 'telegra.ph',
-  'discord.com', 'discordapp.com', 'discord.gg',
-  'reddit.com', 'redditmedia.com', 'redd.it',
+  // Google ecosystem
+  'google.com', 'google.co.jp', 'google.com.hk', 'google.co.uk', 'googleapis.com', 'googleusercontent.com', 'gstatic.com',
+  'googlevideo.com', 'youtube.com', 'ytimg.com', 'youtu.be', 'gmail.com', 'googlecode.com', 'googleblog.com',
+  // AI & Machine Learning
   'openai.com', 'chatgpt.com', 'oaistatic.com', 'oaiusercontent.com', 'anthropic.com', 'claude.ai',
-  'medium.com', 'notion.so', 'dropbox.com', 'pinterest.com', 'tumblr.com', 'bloomberg.com', 'nytimes.com',
-  'wsj.com', 'reuters.com', 'bbc.com', 'bbc.co.uk', 'rfi.fr', 'voanews.com', 'dw.com',
-  'netflix.com', 'nflxvideo.net', 'spotify.com', 'twitch.tv', 'vimeo.com', 'soundcloud.com',
-  'duckduckgo.com', 'line.me', 'signal.org', 'proton.me', 'protonmail.com', 'mega.nz',
+  'huggingface.co', 'cohere.com', 'midjourney.com', 'perplexity.ai', 'groq.com', 'mistral.ai', 'gemini.google.com',
+  // Social & Messaging
+  'twitter.com', 'x.com', 'twimg.com', 't.co', 'telegram.org', 't.me', 'telegra.ph',
+  'facebook.com', 'fbcdn.net', 'instagram.com', 'cdninstagram.com', 'whatsapp.com', 'threads.net',
+  'discord.com', 'discordapp.com', 'discord.gg', 'reddit.com', 'redditmedia.com', 'redd.it',
+  'line.me', 'signal.org', 'tumblr.com', 'pinterest.com',
+  // Developer Platforms
+  'github.com', 'githubassets.com', 'githubusercontent.com', 'gitlab.com', 'docker.com', 'docker.io',
+  'npmjs.org', 'npmjs.com', 'deno.land', 'rust-lang.org', 'golang.org', 'python.org', 'pypi.org',
+  'cloudflare.com', 'cloudflare-dns.com', 'vercel.com', 'vercel.app', 'supabase.com', 'firebase.google.com',
+  // Knowledge & Media
+  'wikipedia.org', 'wikimedia.org', 'wikinews.org', 'wiktionary.org',
+  'medium.com', 'notion.so', 'dropbox.com', 'box.com', 'mega.nz', 'archive.org',
+  'bloomberg.com', 'nytimes.com', 'wsj.com', 'reuters.com', 'bbc.com', 'bbc.co.uk', 'rfi.fr', 'voanews.com', 'dw.com',
+  'netflix.com', 'nflxvideo.net', 'spotify.com', 'spotifycdn.com', 'twitch.tv', 'vimeo.com', 'soundcloud.com',
+  // Privacy & Search
+  'duckduckgo.com', 'proton.me', 'protonmail.com', 'torproject.org', 'startpage.com', 'brave.com'
 ];
 
 export const CURATED_WHITELIST_DOMAINS = [
-  'baidu.com', 'qq.com', 'taobao.com', 'tmall.com', 'jd.com', 'alipay.com', '163.com',
+  'baidu.com', 'qq.com', 'taobao.com', 'tmall.com', 'jd.com', 'alipay.com', '163.com', '126.net',
   'bilibili.com', 'zhihu.com', 'weibo.com', 'sina.com.cn', 'sohu.com', 'cnblogs.com',
-  'csdn.net', 'aliyun.com', 'tencent.com', 'apple.com', 'icloud.com', 'gov.cn',
+  'csdn.net', 'aliyun.com', 'tencent.com', 'apple.com', 'icloud.com', 'gov.cn', 'edu.cn',
+  'gitee.com', 'douyin.com', 'kuaishou.com', 'xiaohongshu.com', 'meituan.com', 'ele.me'
 ];
 
 /**
@@ -112,6 +122,25 @@ export function parseAutoProxyText(text: string): {
 }
 
 /**
+ * Helper to fetch with timeout
+ */
+async function fetchWithTimeout(url: string, timeoutMs: number = 3500): Promise<Response> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, {
+      signal: controller.signal,
+      headers: { 'Accept': 'text/plain, */*' },
+    });
+    clearTimeout(timeoutId);
+    return res;
+  } catch (err) {
+    clearTimeout(timeoutId);
+    throw err;
+  }
+}
+
+/**
  * Downloads and synchronizes rule list from given URL or fallback mirrors
  */
 export async function syncRuleList(targetUrl?: string): Promise<SyncResult> {
@@ -132,9 +161,7 @@ export async function syncRuleList(targetUrl?: string): Promise<SyncResult> {
 
   for (const url of urlsToTry) {
     try {
-      const res = await fetch(url, {
-        headers: { 'Accept': 'text/plain, */*' },
-      });
+      const res = await fetchWithTimeout(url, 3500);
       if (res.ok) {
         const raw = await res.text();
         if (raw && raw.length > 50) {
@@ -151,13 +178,13 @@ export async function syncRuleList(targetUrl?: string): Promise<SyncResult> {
   // If network fetch failed (e.g. completely offline in isolated sandbox), generate comprehensive offline preset
   if (!downloadedText) {
     const offlineLines = [
-      '! [AutoProxy 0.2.9 - ProxyPilot Curated Offline Cache]',
+      '! [AutoProxy 0.2.9 - ProxyPilot Curated Offline Base]',
       '! Synchronized with GFWList High-Frequency Target Rules',
       ...CURATED_WHITELIST_DOMAINS.map(d => `@@||${d}`),
       ...CURATED_TOP_DOMAINS.map(d => `||${d}`),
     ];
     downloadedText = offlineLines.join('\n');
-    usedUrl = '内置离线 GFWList 规则库 (备用)';
+    usedUrl = '内置高频 GFWList 规则库 (备用离线源)';
   }
 
   // Decode if base64

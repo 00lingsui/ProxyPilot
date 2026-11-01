@@ -102,21 +102,28 @@ export const ProfileAutoSwitchEditor: React.FC<ProfileAutoSwitchEditorProps> = (
 
   const handleUpdateRuleList = async () => {
     setUpdatingList(true);
-    setSyncFeedback(null);
+    setSyncFeedback('⏳ 正在连接规则服务器并同步 GFWList...');
     try {
       const res = await syncRuleList(profile.ruleListConfig?.url);
-      if (profile.ruleListConfig) {
-        onChange({
-          ...profile,
-          ruleListConfig: {
-            ...profile.ruleListConfig,
-            rulesText: res.text,
-            lastUpdated: res.lastUpdated,
-          },
-        });
-      }
-      setSyncFeedback(`✅ 成功同步 ${res.ruleCount.toLocaleString()} 条规则（包含 ${res.domainCount.toLocaleString()} 个域名与 ${res.whitelistCount} 条白名单）`);
-      setTimeout(() => setSyncFeedback(null), 5000);
+      const existingConfig = profile.ruleListConfig || {
+        enabled: true,
+        url: 'https://raw.githubusercontent.com/gfwlist/gfwlist/master/gfwlist.txt',
+        format: 'AutoProxy',
+        profileId: allProfiles.find(p => p.profileType === 'FixedProfile')?.id || 'proxy_clash',
+        defaultProfileId: 'direct',
+      };
+
+      onChange({
+        ...profile,
+        ruleListConfig: {
+          ...existingConfig,
+          rulesText: res.text,
+          lastUpdated: res.lastUpdated,
+        },
+      });
+
+      setSyncFeedback(`✅ 成功同步 ${res.ruleCount.toLocaleString()} 条规则（来源: ${res.source}，包含 ${res.domainCount.toLocaleString()} 个常用代理域名与 ${res.whitelistCount} 条国内白名单）`);
+      setTimeout(() => setSyncFeedback(null), 6000);
     } catch (e: any) {
       setSyncFeedback(`❌ 同步失败: ${e.message || '网络连接超时'}`);
       setTimeout(() => setSyncFeedback(null), 5000);
@@ -225,11 +232,14 @@ export const ProfileAutoSwitchEditor: React.FC<ProfileAutoSwitchEditorProps> = (
                         onChange={(e) => handleUpdateRule(idx, { conditionType: e.target.value as ConditionType })}
                         className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded px-2 py-1 text-slate-800 dark:text-slate-200 focus:outline-hidden text-xs"
                       >
-                        <option value="HostWildcardCondition">域名通配符</option>
+                        <option value="HostWildcardCondition">域名通配符 (*.domain.com)</option>
                         <option value="UrlWildcardCondition">网址通配符</option>
                         <option value="HostRegexCondition">域名正则</option>
                         <option value="UrlRegexCondition">网址正则</option>
                         <option value="KeywordCondition">关键词</option>
+                        <option value="IpCidrCondition">CIDR 网段 (192.168.1.0/24)</option>
+                        <option value="PortCondition">端口匹配 (:8443 / :22)</option>
+                        <option value="SchemeCondition">协议/类型 (https: / wss:)</option>
                       </select>
                     </td>
 

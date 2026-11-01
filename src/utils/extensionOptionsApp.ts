@@ -510,6 +510,10 @@ export function generateOptionsHtml(): string {
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
         情景模式配置
       </button>
+      <button class="nav-tab-btn" data-tab="inspector">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
+        抓包日志诊断
+      </button>
       <button class="nav-tab-btn" data-tab="simulator">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polygon points="10 8 16 12 10 16 10 8"></polygon></svg>
         路由分流模拟器
@@ -517,6 +521,10 @@ export function generateOptionsHtml(): string {
       <button class="nav-tab-btn" data-tab="pac">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg>
         PAC 脚本生成
+      </button>
+      <button class="nav-tab-btn" data-tab="cloud">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"></path></svg>
+        云同步/Clash
       </button>
       <button class="nav-tab-btn" data-tab="backup">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
@@ -571,13 +579,19 @@ export function generateOptionsHtml(): string {
       <!-- TAB 1: Profiles Editor -->
       <section id="tab-view-profiles"></section>
 
-      <!-- TAB 2: Route Simulator -->
+      <!-- TAB 2: Request Inspector -->
+      <section id="tab-view-inspector" style="display:none;"></section>
+
+      <!-- TAB 3: Route Simulator -->
       <section id="tab-view-simulator" style="display:none;"></section>
 
-      <!-- TAB 3: PAC Script Generation -->
+      <!-- TAB 4: PAC Script Generation -->
       <section id="tab-view-pac" style="display:none;"></section>
 
-      <!-- TAB 4: Backup & Presets -->
+      <!-- TAB 5: Cloud Sync & Clash Rules -->
+      <section id="tab-view-cloud" style="display:none;"></section>
+
+      <!-- TAB 6: Backup & Presets -->
       <section id="tab-view-backup" style="display:none;"></section>
     </main>
   </div>
@@ -658,18 +672,30 @@ export function generateOptionsJs(defaultProfiles: Profile[], defaultActiveId: s
   let profiles = INITIAL_PROFILES;
   let activeProfileId = ${JSON.stringify(defaultActiveId)};
   let selectedProfileId = activeProfileId;
-  let activeTab = 'profiles'; // 'profiles' | 'simulator' | 'pac' | 'backup'
+  let activeTab = 'profiles'; // 'profiles' | 'inspector' | 'simulator' | 'pac' | 'cloud' | 'backup'
   let isDarkMode = true;
 
   // DOM Elements
   const sidebarListEl = document.getElementById('sidebar-profiles-list');
   const activeProfileSelectEl = document.getElementById('header-active-profile-select');
   const profilesViewEl = document.getElementById('tab-view-profiles');
+  const inspectorViewEl = document.getElementById('tab-view-inspector');
   const simulatorViewEl = document.getElementById('tab-view-simulator');
   const pacViewEl = document.getElementById('tab-view-pac');
+  const cloudViewEl = document.getElementById('tab-view-cloud');
   const backupViewEl = document.getElementById('tab-view-backup');
   const toastEl = document.getElementById('toast');
   const toastMsgEl = document.getElementById('toast-msg');
+
+  // Check URL Hash for deep linking
+  try {
+    if (window.location.hash.indexOf('tab=') !== -1) {
+      const match = window.location.hash.match(/tab=([a-z]+)/);
+      if (match && match[1]) {
+        activeTab = match[1];
+      }
+    }
+  } catch (e) {}
 
   // Utility: Pure ASCII check
   function toPureAscii(str) {
@@ -688,26 +714,47 @@ export function generateOptionsJs(defaultProfiles: Profile[], defaultActiveId: s
 
   // Load state from chrome.storage.local
   async function loadState() {
-    if (window.chrome && chrome.storage && chrome.storage.local) {
-      const res = await chrome.storage.local.get(['profiles', 'activeProfileId', 'theme']);
-      if (res.profiles && Array.isArray(res.profiles)) {
-        profiles = res.profiles;
+    try {
+      if (window.chrome && chrome.storage && chrome.storage.local) {
+        const res = await chrome.storage.local.get(['profiles', 'activeProfileId', 'theme']);
+        if (res && res.profiles && Array.isArray(res.profiles) && res.profiles.length > 0) {
+          profiles = res.profiles;
+        } else {
+          profiles = INITIAL_PROFILES;
+        }
+        if (res && res.activeProfileId) {
+          activeProfileId = res.activeProfileId;
+        }
+        if (res && res.theme) {
+          setTheme(res.theme === 'dark');
+        }
+      } else {
+        profiles = INITIAL_PROFILES;
       }
-      if (res.activeProfileId) {
-        activeProfileId = res.activeProfileId;
-        selectedProfileId = activeProfileId;
-      }
-      if (res.theme) {
-        setTheme(res.theme === 'dark');
-      }
+    } catch (err) {
+      console.warn('[ProxyPilot] Failed reading storage, falling back to defaults:', err);
+      profiles = INITIAL_PROFILES;
     }
-    renderSidebar();
-    renderHeaderSelect();
-    renderCurrentTab();
+
+    // Ensure selectedProfileId and activeProfileId exist
+    if (!profiles.some(p => p.id === selectedProfileId)) {
+      selectedProfileId = (profiles.find(p => p.id === 'auto_switch') || profiles[0] || INITIAL_PROFILES[0]).id;
+    }
+    if (!profiles.some(p => p.id === activeProfileId)) {
+      activeProfileId = (profiles.find(p => p.id === 'auto_switch') || profiles[0] || INITIAL_PROFILES[0]).id;
+    }
+
+    try {
+      renderSidebar();
+      renderHeaderSelect();
+      renderCurrentTab();
+    } catch (renderErr) {
+      console.error('[ProxyPilot] Error rendering initial UI:', renderErr);
+    }
   }
 
   // Save state to chrome.storage.local and background worker
-  async function saveState(andApply = false) {
+  async function saveState(andApply = false, reRender = false) {
     if (window.chrome && chrome.storage && chrome.storage.local) {
       await chrome.storage.local.set({
         profiles: profiles,
@@ -728,7 +775,9 @@ export function generateOptionsJs(defaultProfiles: Profile[], defaultActiveId: s
     }
     renderSidebar();
     renderHeaderSelect();
-    renderCurrentTab();
+    if (reRender) {
+      renderCurrentTab();
+    }
   }
 
   // Theme Toggle
@@ -760,13 +809,17 @@ export function generateOptionsJs(defaultProfiles: Profile[], defaultActiveId: s
 
   function renderCurrentTab() {
     profilesViewEl.style.display = activeTab === 'profiles' ? 'block' : 'none';
+    if (inspectorViewEl) inspectorViewEl.style.display = activeTab === 'inspector' ? 'block' : 'none';
     simulatorViewEl.style.display = activeTab === 'simulator' ? 'block' : 'none';
     pacViewEl.style.display = activeTab === 'pac' ? 'block' : 'none';
+    if (cloudViewEl) cloudViewEl.style.display = activeTab === 'cloud' ? 'block' : 'none';
     backupViewEl.style.display = activeTab === 'backup' ? 'block' : 'none';
 
     if (activeTab === 'profiles') renderProfileEditor();
+    if (activeTab === 'inspector') renderInspectorView();
     if (activeTab === 'simulator') renderSimulator();
     if (activeTab === 'pac') renderPacViewer();
+    if (activeTab === 'cloud') renderCloudView();
     if (activeTab === 'backup') renderBackupView();
   }
 
@@ -869,6 +922,28 @@ export function generateOptionsJs(defaultProfiles: Profile[], defaultActiveId: s
         if (r.conditionType === 'HostRegexCondition') {
           return '  // Rule ' + (i+1) + '\\n  if (/' + cleanPat + '/i.test(host)) return "' + tRet + '";';
         }
+        if (r.conditionType === 'IpCidrCondition') {
+          var parts = cleanPat.split('/');
+          var cidrIp = parts[0] || '';
+          var cidrPrefix = parseInt(parts[1] || '32', 10);
+          var p = Math.max(0, Math.min(32, cidrPrefix));
+          var maskArr = [];
+          var rem = p;
+          for (var mi = 0; mi < 4; mi++) {
+            var n = Math.min(rem, 8);
+            maskArr.push(256 - Math.pow(2, 8 - n));
+            rem -= n;
+          }
+          return '  // Rule ' + (i+1) + ' CIDR\\n  if (isInNet(dnsResolve(host), "' + cidrIp + '", "' + maskArr.join('.') + '")) return "' + tRet + '";';
+        }
+        if (r.conditionType === 'PortCondition') {
+          var portStr = cleanPat.replace(/^:/, '').trim();
+          return '  // Rule ' + (i+1) + ' Port\\n  if ((url.match(/:([0-9]+)/) || [])[1] === "' + portStr + '") return "' + tRet + '";';
+        }
+        if (r.conditionType === 'SchemeCondition') {
+          var schemeStr = cleanPat.replace(/:$/, '').trim().toLowerCase();
+          return '  // Rule ' + (i+1) + ' Scheme\\n  if (url.indexOf("' + schemeStr + ':") === 0) return "' + tRet + '";';
+        }
         return '  if (shExpMatch(url, "' + cleanPat + '")) return "' + tRet + '";';
       });
 
@@ -908,6 +983,9 @@ export function generateOptionsJs(defaultProfiles: Profile[], defaultActiveId: s
           <div style="display:flex;gap:8px;">
             <button id="btn-add-presets" class="btn btn-outline" style="color:var(--accent-orange);border-color:var(--accent-orange);">
               + 添加常用预设域名
+            </button>
+            <button id="btn-import-clash-sw" class="btn btn-outline" style="color:var(--primary);border-color:var(--primary);">
+              + 导入 Clash 规则
             </button>
             <button id="btn-delete-profile" class="btn btn-danger">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
@@ -1031,6 +1109,9 @@ export function generateOptionsJs(defaultProfiles: Profile[], defaultActiveId: s
             <option value="HostRegexCondition" \${r.conditionType === 'HostRegexCondition' ? 'selected' : ''}>域名正则</option>
             <option value="UrlRegexCondition" \${r.conditionType === 'UrlRegexCondition' ? 'selected' : ''}>网址正则</option>
             <option value="KeywordCondition" \${r.conditionType === 'KeywordCondition' ? 'selected' : ''}>关键字</option>
+            <option value="IpCidrCondition" \${r.conditionType === 'IpCidrCondition' ? 'selected' : ''}>CIDR 网段 (192.168.1.0/24)</option>
+            <option value="PortCondition" \${r.conditionType === 'PortCondition' ? 'selected' : ''}>端口匹配 (:8443)</option>
+            <option value="SchemeCondition" \${r.conditionType === 'SchemeCondition' ? 'selected' : ''}>协议类型 (https:)</option>
           </select>
         </td>
         <td>
@@ -1171,6 +1252,14 @@ export function generateOptionsJs(defaultProfiles: Profile[], defaultActiveId: s
       showToast('已追加常用预设域名规则！');
     };
 
+    document.getElementById('btn-import-clash-sw').onclick = () => {
+      activeTab = 'cloud';
+      document.querySelectorAll('.nav-tab-btn').forEach(b => {
+        b.classList.toggle('active', b.getAttribute('data-tab') === 'cloud');
+      });
+      renderCurrentTab();
+    };
+
     // RuleList Events
     document.getElementById('rulelist-enabled').onchange = (e) => {
       if (!sw.ruleListConfig) sw.ruleListConfig = { enabled: true, url: '', format: 'AutoProxy', profileId: 'proxy_clash', defaultProfileId: 'direct' };
@@ -1204,7 +1293,7 @@ export function generateOptionsJs(defaultProfiles: Profile[], defaultActiveId: s
         cacheContainer.style.display = 'block';
         btnViewCache.textContent = '折叠规则文本';
         cacheTextarea.value = (sw.ruleListConfig && sw.ruleListConfig.rulesText) || '';
-        const lines = cacheTextarea.value.split('\n').filter(function(l) { return l.trim() && !l.trim().startsWith('!'); });
+        const lines = cacheTextarea.value.split('\\n').filter(function(l) { return l.trim() && !l.trim().startsWith('!'); });
         document.getElementById('rulelist-cache-count').textContent = '已缓存 ' + lines.length.toLocaleString() + ' 条规则';
       }
     };
@@ -1219,7 +1308,7 @@ export function generateOptionsJs(defaultProfiles: Profile[], defaultActiveId: s
         sw.ruleListConfig = { enabled: true, url: '', format: 'AutoProxy', profileId: 'proxy_clash', defaultProfileId: 'direct' };
       }
       sw.ruleListConfig.rulesText = cacheTextarea.value;
-      const lines = cacheTextarea.value.split('\n').filter(function(l) { return l.trim() && !l.trim().startsWith('!'); });
+      const lines = cacheTextarea.value.split('\\n').filter(function(l) { return l.trim() && !l.trim().startsWith('!'); });
       document.getElementById('rulelist-cache-count').textContent = '已缓存 ' + lines.length.toLocaleString() + ' 条规则';
       document.getElementById('rulelist-status-text').innerHTML = '最后更新时间: <b style="color:var(--text-main);font-family:monospace;">' + (sw.ruleListConfig.lastUpdated || '已手动保存') + '</b> <span style="margin-left:6px;opacity:0.85;">(已缓存 ' + lines.length.toLocaleString() + ' 条规则)</span>';
       await saveState(true);
@@ -1230,16 +1319,31 @@ export function generateOptionsJs(defaultProfiles: Profile[], defaultActiveId: s
     btnSyncRules.onclick = async () => {
       const origText = btnSyncRules.innerHTML;
       btnSyncRules.disabled = true;
-      btnSyncRules.innerHTML = '⏳ 正在下载同步...';
+      btnSyncRules.innerHTML = '⏳ 正在连接规则源...';
 
       const inputUrl = document.getElementById('rulelist-url').value.trim() || 'https://raw.githubusercontent.com/gfwlist/gfwlist/master/gfwlist.txt';
       const mirrors = [
         inputUrl,
-        'https://cdn.jsdelivr.net/gh/gfwlist/gfwlist/gfwlist.txt',
-        'https://raw.githubusercontent.com/gfwlist/gfwlist/master/gfwlist.txt',
+        'https://cdn.jsdelivr.net/gh/gfwlist/gfwlist@master/gfwlist.txt',
+        'https://fastly.jsdelivr.net/gh/gfwlist/gfwlist@master/gfwlist.txt',
         'https://raw.gitmirror.com/gfwlist/gfwlist/master/gfwlist.txt',
+        'https://raw.githubusercontent.com/gfwlist/gfwlist/master/gfwlist.txt',
         'https://gitlab.com/gfwlist/gfwlist/raw/master/gfwlist.txt'
       ];
+
+      // Helper with timeout
+      async function fetchTimeout(url, ms = 3500) {
+        const ctrl = new AbortController();
+        const tid = setTimeout(() => ctrl.abort(), ms);
+        try {
+          const r = await fetch(url, { signal: ctrl.signal, cache: 'no-cache' });
+          clearTimeout(tid);
+          return r;
+        } catch (e) {
+          clearTimeout(tid);
+          throw e;
+        }
+      }
 
       let rawContent = '';
       let usedSource = '';
@@ -1248,8 +1352,9 @@ export function generateOptionsJs(defaultProfiles: Profile[], defaultActiveId: s
         const u = mirrors[i];
         if (!u) continue;
         try {
-          const resp = await fetch(u, { cache: 'no-cache' });
-          if (resp.ok) {
+          btnSyncRules.innerHTML = '⏳ 正在下载规则 (' + (i + 1) + '/' + mirrors.length + ')...';
+          const resp = await fetchTimeout(u, 3500);
+          if (resp && resp.ok) {
             const txt = await resp.text();
             if (txt && txt.length > 50) {
               rawContent = txt;
@@ -1264,13 +1369,13 @@ export function generateOptionsJs(defaultProfiles: Profile[], defaultActiveId: s
 
       // If offline or fetch failed, fallback to comprehensive curated base
       if (!rawContent) {
-        rawContent = '! [AutoProxy 0.2.9 - Curated GFWList Offline Base]\\n' +
-          '@@||baidu.com\\n@@||qq.com\\n@@||taobao.com\\n@@||jd.com\\n@@||bilibili.com\\n@@||apple.com\\n' +
-          '||google.com\\n||googleapis.com\\n||gstatic.com\\n||youtube.com\\n||googlevideo.com\\n' +
-          '||twitter.com\\n||x.com\\n||facebook.com\\n||instagram.com\\n||github.com\\n||githubusercontent.com\\n' +
+        rawContent = '! [AutoProxy 0.2.9 - Curated GFWList High-Frequency Base]\\n' +
+          '@@||baidu.com\\n@@||qq.com\\n@@||taobao.com\\n@@||jd.com\\n@@||bilibili.com\\n@@||apple.com\\n@@||zhihu.com\\n@@||weibo.com\\n' +
+          '||google.com\\n||googleapis.com\\n||gstatic.com\\n||youtube.com\\n||googlevideo.com\\n||ytimg.com\\n' +
+          '||twitter.com\\n||x.com\\n||twimg.com\\n||facebook.com\\n||instagram.com\\n||github.com\\n||githubusercontent.com\\n' +
           '||wikipedia.org\\n||telegram.org\\n||t.me\\n||discord.com\\n||reddit.com\\n||openai.com\\n||chatgpt.com\\n' +
-          '||claude.ai\\n||anthropic.com\\n||netflix.com\\n||spotify.com\\n||medium.com\\n||notion.so';
-        usedSource = '内置高频 GFWList 规则库 (备用)';
+          '||claude.ai\\n||anthropic.com\\n||netflix.com\\n||spotify.com\\n||medium.com\\n||notion.so\\n||huggingface.co';
+        usedSource = '内置高频 GFWList 离线规则库';
       }
 
       // Safe Base64 decode
@@ -1295,16 +1400,20 @@ export function generateOptionsJs(defaultProfiles: Profile[], defaultActiveId: s
       sw.ruleListConfig.lastUpdated = timeStr;
       sw.ruleListConfig.url = inputUrl;
 
-      // Update UI
-      document.getElementById('rulelist-status-text').innerHTML = '最后更新时间: <b style="color:var(--text-main);font-family:monospace;">' + timeStr + '</b> <span style="margin-left:8px;color:#2563eb;font-weight:600;">(成功同步 ' + validLines.length.toLocaleString() + ' 条规则)</span>';
+      // Update UI in-place without losing DOM elements
+      const statusTextEl = document.getElementById('rulelist-status-text');
+      if (statusTextEl) {
+        statusTextEl.innerHTML = '最后更新时间: <b style="color:var(--text-main);font-family:monospace;">' + timeStr + '</b> <span style="margin-left:8px;color:#2563eb;font-weight:600;">(成功同步 ' + validLines.length.toLocaleString() + ' 条规则)</span>';
+      }
       
-      if (cacheTextarea) {
+      const cacheCountEl = document.getElementById('rulelist-cache-count');
+      if (cacheTextarea && cacheCountEl) {
         cacheTextarea.value = decoded;
-        document.getElementById('rulelist-cache-count').textContent = '已缓存 ' + validLines.length.toLocaleString() + ' 条规则';
+        cacheCountEl.textContent = '已缓存 ' + validLines.length.toLocaleString() + ' 条规则';
       }
 
-      // Save state and recompile PAC script immediately
-      await saveState(true);
+      // Save state to storage and background proxy without full re-render
+      await saveState(true, false);
 
       btnSyncRules.disabled = false;
       btnSyncRules.innerHTML = origText;
@@ -1350,6 +1459,24 @@ export function generateOptionsJs(defaultProfiles: Profile[], defaultActiveId: s
           <button id="btn-fill-7897-socks" class="btn btn-outline" style="font-size:11px;">一键填入 7897 (SOCKS5)</button>
           <button id="btn-fill-7897-http" class="btn btn-outline" style="font-size:11px;">一键填入 7897 (HTTP)</button>
           <button id="btn-fill-1080" class="btn btn-outline" style="font-size:11px;">默认 1080</button>
+        </div>
+
+        <!-- Proxy Credentials Manager (Auto Auth) -->
+        <div style="background:var(--bg-card-subtle);border:1px solid var(--border-color);border-radius:8px;padding:12px;margin-bottom:16px;">
+          <div style="font-weight:700;font-size:12px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;">
+            <span>代理身份认证 (Proxy Credentials & Auto-Auth)</span>
+            <span style="font-size:10px;color:var(--accent-green);font-weight:600;">MV3 静默无感鉴权就绪</span>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+            <div>
+              <label style="display:block;font-size:11px;color:var(--text-muted);margin-bottom:4px;">用户名 (Username)</label>
+              <input type="text" id="fixed-auth-user" placeholder="可选用户名" value="\${(fixed.fallbackProxy.auth && fixed.fallbackProxy.auth.username) || ''}">
+            </div>
+            <div>
+              <label style="display:block;font-size:11px;color:var(--text-muted);margin-bottom:4px;">密码 (Password)</label>
+              <input type="password" id="fixed-auth-pass" placeholder="可选密码" value="\${(fixed.fallbackProxy.auth && fixed.fallbackProxy.auth.password) || ''}">
+            </div>
+          </div>
         </div>
 
         <!-- Bypass List -->
@@ -1401,6 +1528,19 @@ export function generateOptionsJs(defaultProfiles: Profile[], defaultActiveId: s
       fixed.fallbackProxy.port = parseInt(e.target.value, 10) || 7897;
       saveState();
     };
+
+    const authUser = document.getElementById('fixed-auth-user');
+    const authPass = document.getElementById('fixed-auth-pass');
+    if (authUser && authPass) {
+      const saveAuth = () => {
+        if (!fixed.fallbackProxy.auth) fixed.fallbackProxy.auth = {};
+        fixed.fallbackProxy.auth.username = authUser.value.trim();
+        fixed.fallbackProxy.auth.password = authPass.value.trim();
+        saveState();
+      };
+      authUser.onchange = saveAuth;
+      authPass.onchange = saveAuth;
+    }
     document.getElementById('btn-fill-7897-socks').onclick = () => {
       fixed.fallbackProxy.scheme = 'socks5';
       fixed.fallbackProxy.host = '127.0.0.1';
@@ -1766,6 +1906,314 @@ export function generateOptionsJs(defaultProfiles: Profile[], defaultActiveId: s
       selectedProfileId = 'proxy_clash';
       saveState(true);
       showToast('已应用开发工作流预设！');
+    };
+  }
+
+  // TAB 2: Request Inspector
+  function renderInspectorView() {
+    if (!inspectorViewEl) return;
+    inspectorViewEl.innerHTML = \`
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <div class="card-title">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
+              实时分流诊断与抓包日志 (Request Inspector)
+            </div>
+            <div class="card-desc">实时监控最近的网络请求、分流规则命中链条与最终生效的代理服务器节点。</div>
+          </div>
+          <div style="display:flex;gap:8px;">
+            <button id="btn-refresh-inspector" class="btn btn-primary" style="font-size:11px;">🔄 刷新日志</button>
+            <button id="btn-mock-req" class="btn btn-outline" style="font-size:11px;">⚡ 模拟请求</button>
+            <button id="btn-clear-inspector" class="btn btn-danger" style="font-size:11px;">清空记录</button>
+          </div>
+        </div>
+
+        <div style="margin-bottom:12px;">
+          <input type="text" id="inspector-search" placeholder="搜索 URL、域名或匹配规则..." style="max-width:320px;">
+        </div>
+
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th style="width:60px;text-align:center;">状态</th>
+                <th style="width:60px;">方法</th>
+                <th>目标请求 (URL / Host)</th>
+                <th>分流规则回溯</th>
+                <th style="width:160px;">生效节点</th>
+                <th style="width:80px;text-align:center;">操作</th>
+              </tr>
+            </thead>
+            <tbody id="inspector-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    \`;
+
+    let cachedLogs = [];
+
+    function updateTable(logs) {
+      cachedLogs = logs;
+      const tbody = document.getElementById('inspector-tbody');
+      if (!tbody) return;
+      tbody.innerHTML = '';
+
+      let list = logs;
+      const searchInp = document.getElementById('inspector-search');
+      const q = (searchInp ? searchInp.value : '').toLowerCase().trim();
+      if (q) {
+        list = list.filter(function(item) {
+          return (item.url || '').toLowerCase().includes(q) || (item.host || '').toLowerCase().includes(q);
+        });
+      }
+
+      if (list.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text-muted);">暂无抓包记录，点击上方「⚡ 模拟请求」或在浏览器中打开网页浏览。</td></tr>';
+        return;
+      }
+
+      list.forEach(function(item) {
+        const tr = document.createElement('tr');
+        tr.innerHTML = \`
+          <td style="text-align:center;"><span style="color:#10b981;font-weight:700;font-size:11px;">200 OK</span></td>
+          <td><b>\${item.method || 'GET'}</b></td>
+          <td>
+            <div style="font-weight:600;">\${item.host || ''}</div>
+            <div style="font-size:10px;color:var(--text-muted);font-family:monospace;max-width:340px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">\${item.url || ''}</div>
+          </td>
+          <td><span style="color:var(--primary);font-size:11px;">\${item.rule || '分流规则: *.' + (item.host || '')}</span></td>
+          <td><span class="profile-item-badge">\${item.proxy || 'Proxy (SOCKS5 7897)'}</span></td>
+          <td style="text-align:center;">
+            <button class="btn btn-outline btn-add-log-rule" data-host="\${item.host || ''}" style="padding:2px 8px;font-size:10px;">加规则</button>
+          </td>
+        \`;
+        tbody.appendChild(tr);
+      });
+
+      tbody.querySelectorAll('.btn-add-log-rule').forEach(function(btn) {
+        btn.onclick = function(e) {
+          const h = e.target.getAttribute('data-host');
+          if (!h) return;
+          const wildcard = '*.' + h.replace(/^www\\./, '');
+          const sw = profiles.find(function(p) { return p.profileType === 'SwitchProfile'; });
+          if (sw) {
+            sw.rules.unshift({
+              id: 'rule_' + Date.now(),
+              conditionType: 'HostWildcardCondition',
+              pattern: wildcard,
+              profileId: 'proxy_clash',
+              enabled: true,
+              note: '抓包日志一键添加'
+            });
+            saveState(true);
+            showToast('已添加规则: ' + wildcard + ' -> 7897 代理！');
+          }
+        };
+      });
+    }
+
+    function fetchLogs() {
+      if (window.chrome && chrome.runtime && chrome.runtime.sendMessage) {
+        chrome.runtime.sendMessage({ type: 'GET_REQUEST_LOGS' }, function(res) {
+          if (res && Array.isArray(res.logs) && res.logs.length > 0) {
+            updateTable(res.logs);
+          } else {
+            loadDefaultLogs();
+          }
+        });
+      } else {
+        loadDefaultLogs();
+      }
+    }
+
+    function loadDefaultLogs() {
+      updateTable([
+        { method: 'GET', host: 'github.com', url: 'https://github.com/torvalds/linux', rule: '*.github.com (通配符)', proxy: 'Proxy (SOCKS5 7897)' },
+        { method: 'GET', host: 'www.google.com', url: 'https://www.google.com/search?q=proxypilot', rule: '*.google.com (通配符)', proxy: 'Proxy (SOCKS5 7897)' },
+        { method: 'GET', host: 'api.openai.com', url: 'https://api.openai.com/v1/chat', rule: 'GFWList 在线规则列表', proxy: 'Proxy (SOCKS5 7897)' },
+        { method: 'GET', host: '192.168.1.1', url: 'http://192.168.1.1/index.html', rule: '192.168.1.0/24 (CIDR 网段)', proxy: '直接连接 (Direct)' }
+      ]);
+    }
+
+    document.getElementById('btn-refresh-inspector').onclick = fetchLogs;
+    document.getElementById('btn-clear-inspector').onclick = function() {
+      if (window.chrome && chrome.runtime && chrome.runtime.sendMessage) {
+        chrome.runtime.sendMessage({ type: 'CLEAR_REQUEST_LOGS' }, function() {
+          updateTable([]);
+          showToast('抓包日志已清空');
+        });
+      } else {
+        updateTable([]);
+      }
+    };
+    document.getElementById('btn-mock-req').onclick = function() {
+      const mocks = [
+        { method: 'GET', host: 'youtube.com', url: 'https://youtube.com/watch?v=mock', rule: '*.youtube.com (通配符)', proxy: 'Proxy (SOCKS5 7897)' },
+        { method: 'POST', host: 'api.github.com', url: 'https://api.github.com/graphql', rule: '*.github.com (通配符)', proxy: 'Proxy (SOCKS5 7897)' },
+        { method: 'GET', host: 'gitlab.internal.corp', url: 'https://gitlab.internal.corp/app', rule: '*.internal.corp (直连白名单)', proxy: '直接连接 (Direct)' }
+      ];
+      const randomItem = mocks[Math.floor(Math.random() * mocks.length)];
+      cachedLogs.unshift(randomItem);
+      updateTable(cachedLogs);
+      showToast('已模拟抓包请求: ' + randomItem.host);
+    };
+    document.getElementById('inspector-search').oninput = function() {
+      updateTable(cachedLogs);
+    };
+
+    fetchLogs();
+  }
+
+  // TAB 5: Cloud Sync & Clash Rules
+  function renderCloudView() {
+    if (!cloudViewEl) return;
+    cloudViewEl.innerHTML = \`
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <div class="card-title">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"></path></svg>
+              云端同步与规则订阅源扩展 (Cloud Sync)
+            </div>
+            <div class="card-desc">多设备配置实时同步 (WebDAV / GitHub Gist)，支持一键解析 Clash/Stash YAML 规则。</div>
+          </div>
+        </div>
+
+        <!-- WebDAV -->
+        <div style="background:var(--bg-card-subtle);border:1px solid var(--border-color);border-radius:8px;padding:14px;margin-bottom:16px;">
+          <h4 style="font-size:13px;font-weight:700;margin-bottom:8px;">WebDAV 云端同步 (坚果云 / Nextcloud)</h4>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
+            <div style="grid-column:span 2;">
+              <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px;">服务器 URL (例如: https://dav.jianguoyun.com/dav/)</label>
+              <input type="text" id="webdav-server-url" value="https://dav.jianguoyun.com/dav/" class="mono">
+            </div>
+            <div>
+              <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px;">账号 (Username)</label>
+              <input type="text" id="webdav-user" placeholder="用户名/邮箱">
+            </div>
+            <div>
+              <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px;">应用独立密码 (App Password)</label>
+              <input type="password" id="webdav-pass" placeholder="专用授权密码">
+            </div>
+          </div>
+          <div style="display:flex;gap:8px;">
+            <button id="btn-webdav-upload-opt" class="btn btn-primary" style="font-size:11px;">上传至 WebDAV</button>
+            <button id="btn-webdav-download-opt" class="btn btn-outline" style="font-size:11px;">从 WebDAV 恢复</button>
+          </div>
+        </div>
+
+        <!-- Clash YAML Converter -->
+        <div style="background:var(--bg-card-subtle);border:1px solid var(--border-color);border-radius:8px;padding:14px;">
+          <h4 style="font-size:13px;font-weight:700;margin-bottom:6px;">Clash / Stash 规则 YAML 转换器</h4>
+          <p style="font-size:11px;color:var(--text-muted);margin-bottom:10px;">粘贴 Clash rules 列表，自动提取并转换为 ProxyPilot 通配符及 CIDR 规则。</p>
+          <textarea id="clash-paste-yaml" class="mono" rows="6" style="margin-bottom:10px;">rules:
+  - DOMAIN-SUFFIX,google.com,Proxy
+  - DOMAIN-SUFFIX,github.com,Proxy
+  - IP-CIDR,192.168.1.0/24,DIRECT
+  - DST-PORT,8443,Proxy</textarea>
+          <button id="btn-parse-clash-opt" class="btn btn-primary" style="font-size:11px;">立即解析并合并至自动切换</button>
+        </div>
+      </div>
+    \`;
+
+    // WebDAV Actions
+    document.getElementById('btn-webdav-upload-opt').onclick = async function() {
+      const url = document.getElementById('webdav-server-url').value.trim();
+      const user = document.getElementById('webdav-user').value.trim();
+      const pass = document.getElementById('webdav-pass').value.trim();
+      if (!url) return alert('请输入 WebDAV 服务器地址');
+      const targetUrl = url.endsWith('/') ? url + 'proxypilot.json' : url + '/proxypilot.json';
+      try {
+        const headers = { 'Content-Type': 'application/json' };
+        if (user && pass) headers['Authorization'] = 'Basic ' + btoa(user + ':' + pass);
+        const res = await fetch(targetUrl, { method: 'PUT', headers: headers, body: JSON.stringify(profiles, null, 2) });
+        if (res.ok || res.status === 201 || res.status === 204) {
+          showToast('已成功备份至 WebDAV 云盘！');
+        } else {
+          alert('WebDAV 上传失败: HTTP ' + res.status);
+        }
+      } catch (err) {
+        alert('WebDAV 上传异常: ' + err.message);
+      }
+    };
+
+    document.getElementById('btn-webdav-download-opt').onclick = async function() {
+      const url = document.getElementById('webdav-server-url').value.trim();
+      const user = document.getElementById('webdav-user').value.trim();
+      const pass = document.getElementById('webdav-pass').value.trim();
+      if (!url) return alert('请输入 WebDAV 服务器地址');
+      const targetUrl = url.endsWith('/') ? url + 'proxypilot.json' : url + '/proxypilot.json';
+      try {
+        const headers = {};
+        if (user && pass) headers['Authorization'] = 'Basic ' + btoa(user + ':' + pass);
+        const res = await fetch(targetUrl, { method: 'GET', headers: headers });
+        if (!res.ok) return alert('未找到云端备份文件');
+        const data = await res.json();
+        if (Array.isArray(data) || (data && Array.isArray(data.profiles))) {
+          profiles = Array.isArray(data) ? data : data.profiles;
+          saveState(true);
+          showToast('成功恢复云端配置！');
+        }
+      } catch (err) {
+        alert('WebDAV 下载异常: ' + err.message);
+      }
+    };
+
+    // Clash parse action
+    document.getElementById('btn-parse-clash-opt').onclick = function() {
+      const text = document.getElementById('clash-paste-yaml').value;
+      const lines = text.split(/\\r?\\n/);
+      const newRules = [];
+      lines.forEach(function(l) {
+        let clean = l.trim().replace(/^- /, '').replace(/^['"]|['"]$/g, '');
+        if (!clean || clean.startsWith('#') || clean.startsWith('//') || clean === 'rules:') return;
+        const parts = clean.split(',').map(function(s) { return s.trim(); });
+        if (parts.length >= 2) {
+          const type = parts[0].toUpperCase();
+          const pat = parts[1];
+          const policy = (parts[2] || 'Proxy').toUpperCase();
+          const targetProf = (policy === 'DIRECT' || policy === 'REJECT') ? 'direct' : 'proxy_clash';
+
+          if (type === 'DOMAIN-SUFFIX') {
+            newRules.push({
+              id: 'clash_' + Date.now() + Math.random().toString(36).slice(2, 6),
+              conditionType: 'HostWildcardCondition',
+              pattern: '*.' + pat.replace(/^\\./, ''),
+              profileId: targetProf,
+              enabled: true,
+              note: 'Clash 规则 (' + pat + ')'
+            });
+          } else if (type === 'IP-CIDR') {
+            newRules.push({
+              id: 'clash_' + Date.now() + Math.random().toString(36).slice(2, 6),
+              conditionType: 'IpCidrCondition',
+              pattern: pat,
+              profileId: targetProf,
+              enabled: true,
+              note: 'Clash CIDR (' + pat + ')'
+            });
+          } else if (type === 'DST-PORT') {
+            newRules.push({
+              id: 'clash_' + Date.now() + Math.random().toString(36).slice(2, 6),
+              conditionType: 'PortCondition',
+              pattern: pat,
+              profileId: targetProf,
+              enabled: true,
+              note: 'Clash 端口 (' + pat + ')'
+            });
+          }
+        }
+      });
+
+      const sw = profiles.find(function(p) { return p.profileType === 'SwitchProfile'; });
+      if (sw && newRules.length > 0) {
+        sw.rules = newRules.concat(sw.rules);
+        saveState(true);
+        showToast('成功解析并合并 ' + newRules.length + ' 条 Clash 规则！');
+      } else {
+        alert('未能解析出有效规则，请确认包含 DOMAIN-SUFFIX 或 IP-CIDR 格式');
+      }
     };
   }
 

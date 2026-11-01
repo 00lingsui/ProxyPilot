@@ -8,6 +8,7 @@ import {
   BypassEntry, 
   SimulationResult 
 } from '../types/omega';
+import { isIpInCidr } from './cidr';
 
 /**
  * Converts a wildcard string (e.g. *.google.com, *test*) to a RegExp
@@ -244,6 +245,20 @@ export function simulateRoute(
           }
         } else if (rule.conditionType === 'KeywordCondition') {
           isMatch = normalizedUrl.includes(rule.pattern) || host.includes(rule.pattern);
+        } else if (rule.conditionType === 'IpCidrCondition') {
+          // Check if host matches CIDR or resolves to local subnet
+          if (/^(\d{1,3}\.){3}\d{1,3}$/.test(host)) {
+            isMatch = isIpInCidr(host, rule.pattern);
+          } else if (host === 'localhost') {
+            isMatch = isIpInCidr('127.0.0.1', rule.pattern);
+          }
+        } else if (rule.conditionType === 'PortCondition') {
+          const targetPort = rule.pattern.replace(/^:/, '').trim();
+          isMatch = port === targetPort;
+        } else if (rule.conditionType === 'SchemeCondition') {
+          const cleanScheme = rule.pattern.replace(/:$/, '').trim().toLowerCase();
+          const targetScheme = protocol.replace(/:$/, '').trim().toLowerCase();
+          isMatch = cleanScheme === targetScheme;
         }
 
         if (isMatch) {

@@ -11,13 +11,15 @@ import {
   Sparkles,
   Sun,
   Moon,
-  Menu
+  Menu,
+  Activity,
+  Cloud
 } from 'lucide-react';
 import { Profile } from '../types/omega';
 
 interface HeaderProps {
-  currentTab: 'profiles' | 'simulator' | 'pac' | 'backup';
-  setCurrentTab: (tab: 'profiles' | 'simulator' | 'pac' | 'backup') => void;
+  currentTab: 'profiles' | 'inspector' | 'simulator' | 'pac' | 'cloud' | 'backup';
+  setCurrentTab: (tab: 'profiles' | 'inspector' | 'simulator' | 'pac' | 'cloud' | 'backup') => void;
   activeProfileId: string;
   setActiveProfileId: (id: string) => void;
   profiles: Profile[];
@@ -83,46 +85,70 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
 
         {/* Zone 2: Desktop Navigation Links (hidden on mobile, uses bottom bar) */}
-        <nav className="hidden md:flex items-center gap-1.5">
+        <nav className="hidden md:flex items-center gap-1">
           <button
             onClick={() => setCurrentTab('profiles')}
-            className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium whitespace-nowrap transition-colors ${
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium whitespace-nowrap transition-colors ${
               currentTab === 'profiles'
                 ? 'bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white shadow-xs font-semibold'
                 : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800/60'
             }`}
           >
             <Layers className="w-3.5 h-3.5" />
-            <span>情景模式配置</span>
+            <span>情景配置</span>
+          </button>
+
+          <button
+            onClick={() => setCurrentTab('inspector')}
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium whitespace-nowrap transition-colors ${
+              currentTab === 'inspector'
+                ? 'bg-blue-50 dark:bg-blue-950/70 text-blue-700 dark:text-blue-300 shadow-xs font-semibold border border-blue-200 dark:border-blue-800'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800/60'
+            }`}
+          >
+            <Activity className="w-3.5 h-3.5 text-blue-500 animate-pulse" />
+            <span>请求日志诊断</span>
           </button>
 
           <button
             onClick={() => setCurrentTab('simulator')}
-            className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium whitespace-nowrap transition-colors ${
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium whitespace-nowrap transition-colors ${
               currentTab === 'simulator'
                 ? 'bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white shadow-xs font-semibold'
                 : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800/60'
             }`}
           >
             <PlayCircle className="w-3.5 h-3.5" />
-            <span>路由分流模拟器</span>
+            <span>路由模拟</span>
           </button>
 
           <button
             onClick={() => setCurrentTab('pac')}
-            className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium whitespace-nowrap transition-colors ${
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium whitespace-nowrap transition-colors ${
               currentTab === 'pac'
                 ? 'bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white shadow-xs font-semibold'
                 : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800/60'
             }`}
           >
             <Code2 className="w-3.5 h-3.5" />
-            <span>PAC 脚本生成</span>
+            <span>PAC 脚本</span>
+          </button>
+
+          <button
+            onClick={() => setCurrentTab('cloud')}
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium whitespace-nowrap transition-colors ${
+              currentTab === 'cloud'
+                ? 'bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white shadow-xs font-semibold'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800/60'
+            }`}
+          >
+            <Cloud className="w-3.5 h-3.5" />
+            <span>云同步/Clash</span>
           </button>
 
           <button
             onClick={() => setCurrentTab('backup')}
-            className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium whitespace-nowrap transition-colors ${
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium whitespace-nowrap transition-colors ${
               currentTab === 'backup'
                 ? 'bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white shadow-xs font-semibold'
                 : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800/60'
@@ -235,15 +261,25 @@ export const Header: React.FC<HeaderProps> = ({
       </header>
 
       {/* Mobile Bottom Navigation Bar (Pattern 1 from Mobile Touch Guidelines) */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-slate-200 dark:border-slate-800 grid grid-cols-4 items-center h-16 pb-safe transition-colors select-none">
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-slate-200 dark:border-slate-800 grid grid-cols-5 items-center h-16 pb-safe transition-colors select-none">
         <button
           onClick={() => setCurrentTab('profiles')}
           className={`min-h-[48px] flex flex-col items-center justify-center gap-0.5 transition-colors ${
             currentTab === 'profiles' ? 'text-blue-600 dark:text-blue-400 font-semibold' : 'text-slate-500 dark:text-slate-400'
           }`}
         >
-          <Layers className="w-5 h-5" />
+          <Layers className="w-4 h-4" />
           <span className="text-[10px] tracking-tight">情景配置</span>
+        </button>
+
+        <button
+          onClick={() => setCurrentTab('inspector')}
+          className={`min-h-[48px] flex flex-col items-center justify-center gap-0.5 transition-colors ${
+            currentTab === 'inspector' ? 'text-blue-600 dark:text-blue-400 font-semibold' : 'text-slate-500 dark:text-slate-400'
+          }`}
+        >
+          <Activity className="w-4 h-4 text-blue-500" />
+          <span className="text-[10px] tracking-tight">抓包诊断</span>
         </button>
 
         <button
@@ -252,18 +288,18 @@ export const Header: React.FC<HeaderProps> = ({
             currentTab === 'simulator' ? 'text-blue-600 dark:text-blue-400 font-semibold' : 'text-slate-500 dark:text-slate-400'
           }`}
         >
-          <PlayCircle className="w-5 h-5" />
+          <PlayCircle className="w-4 h-4" />
           <span className="text-[10px] tracking-tight">路由模拟</span>
         </button>
 
         <button
-          onClick={() => setCurrentTab('pac')}
+          onClick={() => setCurrentTab('cloud')}
           className={`min-h-[48px] flex flex-col items-center justify-center gap-0.5 transition-colors ${
-            currentTab === 'pac' ? 'text-blue-600 dark:text-blue-400 font-semibold' : 'text-slate-500 dark:text-slate-400'
+            currentTab === 'cloud' ? 'text-blue-600 dark:text-blue-400 font-semibold' : 'text-slate-500 dark:text-slate-400'
           }`}
         >
-          <Code2 className="w-5 h-5" />
-          <span className="text-[10px] tracking-tight">PAC 脚本</span>
+          <Cloud className="w-4 h-4" />
+          <span className="text-[10px] tracking-tight">云同步</span>
         </button>
 
         <button
@@ -272,7 +308,7 @@ export const Header: React.FC<HeaderProps> = ({
             currentTab === 'backup' ? 'text-blue-600 dark:text-blue-400 font-semibold' : 'text-slate-500 dark:text-slate-400'
           }`}
         >
-          <Sparkles className="w-5 h-5" />
+          <Sparkles className="w-4 h-4" />
           <span className="text-[10px] tracking-tight">预设/导出</span>
         </button>
       </nav>

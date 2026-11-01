@@ -34,7 +34,16 @@ export type ConditionType =
   | 'UrlWildcardCondition'
   | 'UrlRegexCondition'
   | 'KeywordCondition'
-  | 'BypassCondition';
+  | 'BypassCondition'
+  | 'IpCidrCondition'
+  | 'PortCondition'
+  | 'SchemeCondition';
+
+export interface ProxyAuth {
+  username?: string;
+  password?: string;
+  enabled?: boolean;
+}
 
 export interface SwitchRule {
   id: string;
@@ -48,7 +57,7 @@ export interface SwitchRule {
 export interface RuleListConfig {
   enabled: boolean;
   url: string;
-  format: 'AutoProxy' | 'Switchy';
+  format: 'AutoProxy' | 'Switchy' | 'Clash';
   profileId: string;
   defaultProfileId: string;
   rulesText?: string;
@@ -79,6 +88,7 @@ export interface FixedProfile extends BaseProfile {
   proxyForFtp?: ProxyServer;
   useSingleProxy: boolean;
   bypassList: BypassEntry[];
+  auth?: ProxyAuth;
 }
 
 export interface PacProfile extends BaseProfile {
@@ -125,4 +135,59 @@ export interface SimulationResult {
   finalProxySummary: string;
   isDirect: boolean;
   latencyMs?: number;
+}
+
+export interface RequestLogItem {
+  id: string;
+  timestamp: number;
+  url: string;
+  method: string;
+  type: string;
+  host: string;
+  port: string;
+  scheme: string;
+  matchedRuleDescription?: string;
+  matchedRuleType?: string;
+  matchedPattern?: string;
+  targetProfileId: string;
+  targetProfileName: string;
+  proxySummary: string;
+  status: number | string;
+  durationMs: number;
+  tabId?: number;
+  tabUrl?: string;
+  fromCache?: boolean;
+}
+
+export interface WebDavConfig {
+  enabled: boolean;
+  serverUrl: string;
+  username?: string;
+  password?: string;
+  remotePath?: string;
+  autoSync?: boolean;
+  lastSyncTime?: string;
+}
+
+export interface GitHubGistConfig {
+  enabled: boolean;
+  personalAccessToken?: string;
+  gistId?: string;
+  filename?: string;
+  autoSync?: boolean;
+  lastSyncTime?: string;
+}
+
+export interface CloudSyncSettings {
+  webdav: WebDavConfig;
+  gist: GitHubGistConfig;
+}
+
+export interface TabOverride {
+  tabId: number;
+  tabUrl: string;
+  tabTitle?: string;
+  profileId: string;
+  expireAt?: number;
+  enabled: boolean;
 }

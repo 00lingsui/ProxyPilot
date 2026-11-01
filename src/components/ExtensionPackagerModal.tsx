@@ -45,7 +45,7 @@ export const ExtensionPackagerModal: React.FC<ExtensionPackagerModalProps> = ({
       const url = URL.createObjectURL(zipBlob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = 'ProxyPilot-Chrome-Extension-v1.0.0.zip';
+      a.download = 'ProxyPilot-Chrome-Extension-v1.0.4.zip';
       a.click();
       URL.revokeObjectURL(url);
       setDownloading(false);
