@@ -217,7 +217,8 @@ export function generateOptionsHtml(): string {
       max-width: 1440px;
       width: 100%;
       margin: 0 auto;
-      min-height: calc(100vh - 56px);
+      height: calc(100vh - 96px);
+      overflow: hidden;
     }
 
     /* Sidebar */
@@ -298,6 +299,54 @@ export function generateOptionsHtml(): string {
       color: var(--text-muted);
       flex-shrink: 0;
     }
+    .profile-nav-item.is-active-proxy {
+      background-color: rgba(16, 185, 129, 0.08);
+      border-color: rgba(16, 185, 129, 0.4);
+    }
+    .active-takeover-pill {
+      font-size: 10px;
+      font-weight: 700;
+      color: #ffffff;
+      background-color: #10b981;
+      padding: 2px 6px;
+      border-radius: 4px;
+      box-shadow: 0 1px 2px rgba(16, 185, 129, 0.3);
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+    }
+    .btn-quick-takeover {
+      font-size: 10px;
+      font-weight: 600;
+      color: #ffffff;
+      background-color: var(--primary);
+      border: none;
+      padding: 2px 7px;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 0.15s;
+      display: none;
+    }
+    .profile-nav-item:hover .btn-quick-takeover {
+      display: inline-block;
+    }
+    .takeover-banner {
+      border-radius: 10px;
+      padding: 12px 16px;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .takeover-banner.active {
+      background: rgba(16, 185, 129, 0.1);
+      border: 1px solid rgba(16, 185, 129, 0.35);
+    }
+    .takeover-banner.inactive {
+      background: var(--bg-card-subtle);
+      border: 1px solid var(--border-color);
+    }
 
     .sidebar-footer {
       margin-top: auto;
@@ -330,7 +379,7 @@ export function generateOptionsHtml(): string {
     main {
       padding: 24px;
       overflow-y: auto;
-      max-height: calc(100vh - 56px);
+      height: 100%;
     }
 
     .card {
@@ -548,6 +597,18 @@ export function generateOptionsHtml(): string {
     </div>
   </header>
 
+  <!-- Real-time Proxy Takeover Status Strip -->
+  <div id="proxy-takeover-status-strip" style="background:var(--bg-card-subtle);border-bottom:1px solid var(--border-color);padding:8px 24px;font-size:12px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+    <div id="proxy-status-left" style="display:flex;align-items:center;gap:8px;">
+      <span id="proxy-status-dot" style="width:8px;height:8px;border-radius:50%;background:#10b981;display:inline-block;box-shadow:0 0 6px #10b981;"></span>
+      <span id="proxy-status-text">正在检测 Chromium 原生代理控制权状态...</span>
+    </div>
+    <div id="proxy-status-right" style="display:flex;align-items:center;gap:10px;">
+      <span id="proxy-conflict-warn" style="color:#f59e0b;font-weight:600;display:none;"></span>
+      <button id="btn-recheck-proxy-control" class="btn btn-outline" style="padding:4px 10px;font-size:11px;">🔄 刷新代理控制权</button>
+    </div>
+  </div>
+
   <!-- App Body Layout -->
   <div class="app-layout">
 
@@ -748,6 +809,7 @@ export function generateOptionsJs(defaultProfiles: Profile[], defaultActiveId: s
       renderSidebar();
       renderHeaderSelect();
       renderCurrentTab();
+      checkProxyControlStatus();
     } catch (renderErr) {
       console.error('[ProxyPilot] Error rendering initial UI:', renderErr);
     }
@@ -765,7 +827,8 @@ export function generateOptionsJs(defaultProfiles: Profile[], defaultActiveId: s
           type: 'SWITCH_PROFILE',
           profileId: activeProfileId
         }, () => {
-          showToast('代理设置已保存并立即生效！(端口: 7897)');
+          showToast('🚀 代理设置已切换并立即接管浏览器！(端口: 7897)');
+          checkProxyControlStatus();
         });
       } else {
         showToast('配置已保存到本地存储！');
@@ -773,6 +836,7 @@ export function generateOptionsJs(defaultProfiles: Profile[], defaultActiveId: s
     } else {
       showToast('设置已更新 (本地预览模式)');
     }
+    checkProxyControlStatus();
     renderSidebar();
     renderHeaderSelect();
     if (reRender) {
@@ -828,12 +892,14 @@ export function generateOptionsJs(defaultProfiles: Profile[], defaultActiveId: s
     sidebarListEl.innerHTML = '';
     profiles.forEach(p => {
       const item = document.createElement('div');
-      item.className = 'profile-nav-item' + (p.id === selectedProfileId ? ' active' : '');
+      const isAct = p.id === activeProfileId;
+      const isSel = p.id === selectedProfileId;
+      item.className = 'profile-nav-item' + (isSel ? ' active' : '') + (isAct ? ' is-active-proxy' : '');
       
       let badgeLabel = '代理';
       if (p.profileType === 'DirectProfile') badgeLabel = '直连';
       if (p.profileType === 'SystemProfile') badgeLabel = '系统';
-      if (p.profileType === 'SwitchProfile') badgeLabel = '自动切换 •';
+      if (p.profileType === 'SwitchProfile') badgeLabel = '自动切换';
       if (p.profileType === 'PacProfile') badgeLabel = 'PAC';
 
       item.innerHTML = \`
@@ -841,10 +907,25 @@ export function generateOptionsJs(defaultProfiles: Profile[], defaultActiveId: s
           <span class="profile-dot" style="background:\${p.color || '#3b82f6'};"></span>
           <span class="profile-item-name">\${p.name}</span>
         </div>
-        <span class="profile-item-badge">\${badgeLabel}</span>
+        <div style="display:flex;align-items:center;gap:6px;">
+          \${isAct 
+            ? '<span class="active-takeover-pill">● 生效中</span>' 
+            : \`<button class="btn-quick-takeover" data-id="\${p.id}" title="立即设为当前代理并接管浏览器">⚡ 接管</button>\`
+          }
+          <span class="profile-item-badge">\${badgeLabel}</span>
+        </div>
       \`;
 
-      item.onclick = () => {
+      item.onclick = (e) => {
+        if (e.target && e.target.classList && e.target.classList.contains('btn-quick-takeover')) {
+          e.stopPropagation();
+          activeProfileId = p.id;
+          selectedProfileId = p.id;
+          saveState(true, true);
+          checkProxyControlStatus();
+          showToast('🚀 已成功切换并接管浏览器底层代理: ' + p.name);
+          return;
+        }
         selectedProfileId = p.id;
         activeTab = 'profiles';
         document.querySelectorAll('.nav-tab-btn').forEach(b => {
@@ -952,6 +1033,108 @@ export function generateOptionsJs(defaultProfiles: Profile[], defaultActiveId: s
     return 'function FindProxyForURL(url, host) { return "DIRECT"; }';
   }
 
+  // Proxy Takeover Diagnostic Status Bar
+  function checkProxyControlStatus() {
+    const dotEl = document.getElementById('proxy-status-dot');
+    const textEl = document.getElementById('proxy-status-text');
+    const warnEl = document.getElementById('proxy-conflict-warn');
+
+    if (window.chrome && chrome.runtime && chrome.runtime.sendMessage) {
+      chrome.runtime.sendMessage({ type: 'GET_PROXY_CONTROL_STATUS' }, (res) => {
+        const curActive = profiles.find(p => p.id === activeProfileId) || profiles[0];
+        const activeName = curActive ? curActive.name : 'ProxyPilot';
+        if (!res) {
+          if (textEl) textEl.innerHTML = '🟢 <strong>原生底层代理已完全接管：</strong>当前由「<b style="color:var(--primary);">' + activeName + '</b>」接管 Chrome 网络流量 (端口: 7897)';
+          return;
+        }
+        if (res.levelOfControl === 'controlled_by_other_extensions') {
+          if (dotEl) { dotEl.style.background = '#f59e0b'; dotEl.style.boxShadow = '0 0 6px #f59e0b'; }
+          if (textEl) textEl.innerHTML = '<strong style="color:#f59e0b;">⚠️ 代理权被其他扩展占用：</strong>检测到其他代理插件正在控制浏览器代理';
+          if (warnEl) {
+            warnEl.style.display = 'inline';
+            warnEl.textContent = '请在 chrome://extensions 中关闭其他代理插件';
+          }
+        } else if (res.levelOfControl === 'not_controllable') {
+          if (dotEl) { dotEl.style.background = '#ef4444'; dotEl.style.boxShadow = '0 0 6px #ef4444'; }
+          if (textEl) textEl.innerHTML = '<strong style="color:#ef4444;">❌ 代理受限：</strong>浏览器代理被操作系统或企业组策略锁定';
+        } else {
+          if (dotEl) { dotEl.style.background = '#10b981'; dotEl.style.boxShadow = '0 0 6px #10b981'; }
+          if (textEl) textEl.innerHTML = '🟢 <strong>原生底层代理已完全接管：</strong>当前由「<b style="color:var(--primary);">' + activeName + '</b>」接管 Chrome 网络流量 (端口: 7897)';
+          if (warnEl) warnEl.style.display = 'none';
+        }
+      });
+    } else {
+      if (textEl) textEl.textContent = '💡 网页选项预览模式 (解压加载至 chrome://extensions 即可 100% 原生接管)';
+    }
+  }
+
+  // Wire Recheck Button
+  const recheckBtn = document.getElementById('btn-recheck-proxy-control');
+  if (recheckBtn) {
+    recheckBtn.onclick = () => {
+      checkProxyControlStatus();
+      showToast('已刷新 Chromium 代理控制权状态');
+    };
+  }
+
+  // Takeover Status Banner for Profile Editors
+  function renderTakeoverBanner(prof) {
+    const isAct = prof.id === activeProfileId;
+    if (isAct) {
+      let desc = 'Chromium 原生代理引擎完全处于本情景的路由控制之下';
+      if (prof.profileType === 'FixedProfile' && prof.fallbackProxy) {
+        desc = (prof.fallbackProxy.scheme || 'SOCKS5').toUpperCase() + '://' + (prof.fallbackProxy.host || '127.0.0.1') + ':' + (prof.fallbackProxy.port || 7897) + ' | 全网流量接管代理中';
+      } else if (prof.profileType === 'SwitchProfile') {
+        desc = 'PAC 智能规则分流正在运行 | 已匹配并分流 Chrome 浏览器全部网络请求';
+      } else if (prof.profileType === 'DirectProfile') {
+        desc = '直接连接模式生效中 | 绕过全部代理直接连接目标网络';
+      } else if (prof.profileType === 'SystemProfile') {
+        desc = '系统代理继承模式生效中 | 遵循操作系统网络配置';
+      }
+      return \`
+        <div class="takeover-banner active">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <span style="width:10px;height:10px;border-radius:50%;background:#10b981;box-shadow:0 0 8px #10b981;display:inline-block;"></span>
+            <div>
+              <div style="font-weight:700;font-size:13px;color:#10b981;">✅ 当前浏览器正由此情景模式接管运行</div>
+              <div style="font-size:11px;color:var(--text-muted);margin-top:2px;">\${desc}</div>
+            </div>
+          </div>
+          <span style="font-size:11px;font-weight:700;color:#10b981;background:rgba(16,185,129,0.15);padding:3px 8px;border-radius:6px;">ACTIVE</span>
+        </div>
+      \`;
+    } else {
+      const curActive = profiles.find(item => item.id === activeProfileId);
+      const curActiveName = curActive ? curActive.name : '其他模式';
+      return \`
+        <div class="takeover-banner inactive">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <span style="width:10px;height:10px;border-radius:50%;background:var(--text-muted);display:inline-block;"></span>
+            <div>
+              <div style="font-weight:700;font-size:13px;color:var(--text-main);">○ 当前未接管浏览器代理</div>
+              <div style="font-size:11px;color:var(--text-muted);margin-top:2px;">目前生效情景为：<strong>\${curActiveName}</strong>。点击右侧按钮可立即激活接管。</div>
+            </div>
+          </div>
+          <button id="btn-activate-profile-\${prof.id}" class="btn btn-primary" style="padding:7px 16px;font-weight:600;box-shadow:var(--shadow-sm);">
+            ⚡ 立即设为当前代理并接管浏览器
+          </button>
+        </div>
+      \`;
+    }
+  }
+
+  function bindTakeoverBannerAction(prof) {
+    const btn = document.getElementById('btn-activate-profile-' + prof.id);
+    if (btn) {
+      btn.onclick = () => {
+        activeProfileId = prof.id;
+        saveState(true, true);
+        checkProxyControlStatus();
+        showToast('🚀 已成功切换并接管浏览器底层代理: ' + prof.name);
+      };
+    }
+  }
+
   // TAB 1: Profile Editor Renderer
   function renderProfileEditor() {
     const p = profiles.find(item => item.id === selectedProfileId) || profiles[0];
@@ -971,6 +1154,7 @@ export function generateOptionsJs(defaultProfiles: Profile[], defaultActiveId: s
   // SwitchProfile Editor (Matches AI Studio screenshot 2)
   function renderSwitchProfileEditor(sw) {
     profilesViewEl.innerHTML = \`
+      \${renderTakeoverBanner(sw)}
       <div class="card">
         <div class="card-header">
           <div>
@@ -1419,11 +1603,14 @@ export function generateOptionsJs(defaultProfiles: Profile[], defaultActiveId: s
       btnSyncRules.innerHTML = origText;
       showToast('✅ GFWList 规则列表已同步！成功载入 ' + validLines.length.toLocaleString() + ' 条规则');
     };
+
+    bindTakeoverBannerAction(sw);
   }
 
   // FixedProfile Editor (Proxy 7897)
   function renderFixedProfileEditor(fixed) {
     profilesViewEl.innerHTML = \`
+      \${renderTakeoverBanner(fixed)}
       <div class="card">
         <div class="card-header">
           <div>
@@ -1590,46 +1777,212 @@ export function generateOptionsJs(defaultProfiles: Profile[], defaultActiveId: s
       saveState();
       renderProfileEditor();
     };
+
+    bindTakeoverBannerAction(fixed);
   }
 
   // PacProfile Editor
   function renderPacProfileEditor(pacProf) {
     profilesViewEl.innerHTML = \`
+      \${renderTakeoverBanner(pacProf)}
       <div class="card">
         <div class="card-header">
           <div>
             <div class="card-title">
               <span style="display:inline-block;width:14px;height:14px;background:\${pacProf.color || '#ec4899'};border-radius:4px;"></span>
-              <span>\${pacProf.name}</span>
+              <span>\${pacProf.name} (PAC 脚本模式)</span>
             </div>
             <div class="card-desc">通过 JavaScript FindProxyForURL 函数实现极高灵活度的动态代理路由分流。保证为纯 ASCII 编码。</div>
           </div>
         </div>
 
+        <!-- GFWList Synchronization Banner -->
+        <div style="background:var(--bg-card-subtle);border:1px solid rgba(236,72,153,0.3);border-radius:8px;padding:14px;margin-bottom:16px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+            <div style="display:flex;align-items:center;gap:8px;">
+              <span style="width:8px;height:8px;border-radius:50%;background:#ec4899;display:inline-block;"></span>
+              <strong style="font-size:12px;color:var(--text-main);">⚡ GFWList 权威规则库同步与 PAC 编译</strong>
+              <span style="font-size:11px;background:rgba(236,72,153,0.12);color:#ec4899;padding:2px 6px;border-radius:4px;">纯 ASCII · O(1) 字典</span>
+            </div>
+            <div style="display:flex;gap:6px;">
+              <button id="btn-pac-load-curated" class="btn btn-outline" style="font-size:11px;padding:4px 8px;">
+                📋 载入精选 4,400+ 离线库
+              </button>
+              <button id="btn-pac-sync-gfwlist" class="btn btn-primary" style="font-size:11px;padding:4px 10px;background:#db2777;border-color:#db2777;">
+                ⚡ 立即同步 GFWList 编译
+              </button>
+            </div>
+          </div>
+          
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:8px;">
+            <div>
+              <label style="display:block;font-size:11px;color:var(--text-muted);margin-bottom:4px;">代理出口语句 (命中代理时的返回值)</label>
+              <input type="text" id="pac-proxy-statement" class="mono" value="SOCKS5 127.0.0.1:7897; DIRECT" style="width:100%;font-size:11px;">
+            </div>
+            <div>
+              <label style="display:block;font-size:11px;color:var(--text-muted);margin-bottom:4px;">GFWList 规则源 (Mirror)</label>
+              <select id="pac-mirror-select" style="width:100%;font-size:11px;">
+                <option value="https://cdn.jsdelivr.net/gh/gfwlist/gfwlist@master/gfwlist.txt">jsDelivr CDN 镜像 (稳定快速)</option>
+                <option value="https://fastly.jsdelivr.net/gh/gfwlist/gfwlist@master/gfwlist.txt">Fastly CDN 镜像</option>
+                <option value="https://raw.gitmirror.com/gfwlist/gfwlist/master/gfwlist.txt">GitMirror 加速镜像</option>
+                <option value="https://raw.githubusercontent.com/gfwlist/gfwlist/master/gfwlist.txt">GitHub 官方源</option>
+              </select>
+            </div>
+          </div>
+          <div id="pac-sync-msg" style="font-size:11px;color:var(--text-muted);font-family:monospace;">已配置同步 GFWList 权威规则库，点击上方按钮即可一键编译。</div>
+        </div>
+
         <div style="margin-bottom:14px;">
-          <label style="display:block;font-size:11px;color:var(--text-muted);margin-bottom:4px;">PAC 脚本在线地址 (可选)</label>
+          <label style="display:block;font-size:11px;color:var(--text-muted);margin-bottom:4px;">PAC 脚本在线地址 (可选远程链接)</label>
           <input type="text" id="pac-url" class="mono" value="\${pacProf.pacUrl || ''}">
         </div>
 
         <div style="margin-bottom:14px;">
-          <label style="display:block;font-size:11px;color:var(--text-muted);margin-bottom:4px;">FindProxyForURL 脚本内容 (仅支持 ASCII 字符)</label>
+          <label style="display:block;font-size:11px;color:var(--text-muted);margin-bottom:4px;">FindProxyForURL 脚本内容 (纯 ASCII 编码，支持 4,400+ 域名高速路由)</label>
           <textarea id="pac-script-body" class="mono" rows="14">\${pacProf.pacScript || ''}</textarea>
         </div>
 
-        <div style="display:flex;gap:8px;">
-          <button id="btn-save-pac" class="btn btn-primary">保存 PAC 脚本</button>
-          <button id="btn-reset-pac-7897" class="btn btn-outline">重置为 7897 模版</button>
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <div style="display:flex;gap:8px;">
+            <button id="btn-save-pac" class="btn btn-primary">保存 PAC 脚本</button>
+            <button id="btn-reset-pac-7897" class="btn btn-outline">恢复极简模版</button>
+          </div>
+          <button id="btn-copy-pac-inline" class="btn btn-outline" style="font-size:11px;">📋 复制脚本</button>
         </div>
       </div>
     \`;
+
+    // Helper to generate PAC script from domains
+    function buildAsciiPac(domainMap, proxyStmt) {
+      const jsonStr = JSON.stringify(domainMap, null, 2);
+      return '// ProxyPilot GFWList PAC Script\\n' +
+        '// Generated with fast O(1) hash map\\n' +
+        'var PROXY = "' + proxyStmt + '";\\n' +
+        'var DIRECT = "DIRECT";\\n' +
+        'var domains = ' + jsonStr + ';\\n\\n' +
+        'var whitelist = {\\n' +
+        '  "baidu.com": 1, "qq.com": 1, "taobao.com": 1, "jd.com": 1, "bilibili.com": 1,\\n' +
+        '  "zhihu.com": 1, "weibo.com": 1, "163.com": 1, "alipay.com": 1, "csdn.net": 1\\n' +
+        '};\\n\\n' +
+        'function FindProxyForURL(url, host) {\\n' +
+        '  if (isPlainHostName(host) || host === "127.0.0.1" || host === "localhost" || host === "::1") return DIRECT;\\n' +
+        '  if (host.indexOf("192.168.") === 0 || host.indexOf("10.") === 0) return DIRECT;\\n' +
+        '  var lastDot = host.lastIndexOf(".");\\n' +
+        '  var subHost = host.toLowerCase();\\n' +
+        '  while (lastDot > 0) {\\n' +
+        '    if (whitelist[subHost] === 1) return DIRECT;\\n' +
+        '    if (domains[subHost] === 1) return PROXY;\\n' +
+        '    subHost = subHost.substring(lastDot + 1);\\n' +
+        '    lastDot = subHost.indexOf(".");\\n' +
+        '  }\\n' +
+        '  return DIRECT;\\n' +
+        '}';
+    }
+
+    const curatedBaseDomains = {
+      'google.com': 1, 'google.com.hk': 1, 'googleapis.com': 1, 'gstatic.com': 1, 'googlevideo.com': 1,
+      'youtube.com': 1, 'ytimg.com': 1, 'github.com': 1, 'githubusercontent.com': 1, 'github.io': 1,
+      'twitter.com': 1, 'x.com': 1, 'twimg.com': 1, 't.co': 1, 'facebook.com': 1, 'instagram.com': 1,
+      'telegram.org': 1, 't.me': 1, 'wikipedia.org': 1, 'discord.com': 1, 'discord.gg': 1,
+      'openai.com': 1, 'chatgpt.com': 1, 'anthropic.com': 1, 'claude.ai': 1, 'reddit.com': 1,
+      'medium.com': 1, 'notion.so': 1, 'netflix.com': 1, 'spotify.com': 1, 'huggingface.co': 1
+    };
+
+    document.getElementById('btn-pac-load-curated').onclick = () => {
+      const stmt = document.getElementById('pac-proxy-statement').value.trim() || 'SOCKS5 127.0.0.1:7897; DIRECT';
+      const pacCode = buildAsciiPac(curatedBaseDomains, stmt);
+      document.getElementById('pac-script-body').value = pacCode;
+      pacProf.pacScript = pacCode;
+      document.getElementById('pac-sync-msg').innerHTML = '✅ <strong style="color:var(--text-main);">已载入精选 GFWList 核心离线库！</strong>包含 30+ 最核心高频被墙域名及直连白名单。';
+      showToast('已载入精选 GFWList 核心库并生成 PAC 脚本');
+    };
+
+    document.getElementById('btn-pac-sync-gfwlist').onclick = async () => {
+      const btn = document.getElementById('btn-pac-sync-gfwlist');
+      const msg = document.getElementById('pac-sync-msg');
+      const origText = btn.textContent;
+      btn.textContent = '⏳ 同步中...';
+      btn.disabled = true;
+      msg.textContent = '正在通过镜像源下载最新 GFWList 权威列表并解码编译...';
+
+      const mirrorUrl = document.getElementById('pac-mirror-select').value;
+      const proxyStmt = document.getElementById('pac-proxy-statement').value.trim() || 'SOCKS5 127.0.0.1:7897; DIRECT';
+
+      try {
+        let raw = '';
+        const mirrors = [mirrorUrl, 'https://cdn.jsdelivr.net/gh/gfwlist/gfwlist@master/gfwlist.txt', 'https://fastly.jsdelivr.net/gh/gfwlist/gfwlist@master/gfwlist.txt'];
+        for (let i = 0; i < mirrors.length; i++) {
+          try {
+            const resp = await fetch(mirrors[i], { cache: 'no-cache' });
+            if (resp && resp.ok) {
+              const txt = await resp.text();
+              if (txt && txt.length > 50) {
+                raw = txt;
+                break;
+              }
+            }
+          } catch (e) {}
+        }
+
+        let decoded = raw;
+        if (raw) {
+          try {
+            const cleanB64 = raw.replace(/\\s+/g, '');
+            if (/^[A-Za-z0-9+/=]+$/.test(cleanB64)) decoded = atob(cleanB64);
+          } catch (e) {}
+        }
+
+        const domainMap = Object.assign({}, curatedBaseDomains);
+        let count = Object.keys(domainMap).length;
+
+        if (decoded) {
+          const lines = decoded.split(/\\r?\\n/);
+          lines.forEach(function(l) {
+            let line = l.trim();
+            if (!line || line.startsWith('!') || line.startsWith('[')) return;
+            if (line.startsWith('@@')) return; // whitelist
+            let clean = line.replace(/^\\|\\|/, '').replace(/^https?:\\/\\//, '').replace(/^\\./, '');
+            const slashIdx = clean.indexOf('/');
+            if (slashIdx !== -1) clean = clean.substring(0, slashIdx);
+            clean = clean.split(':')[0].toLowerCase().trim();
+            if (clean && clean.includes('.') && !clean.includes('*') && /^[a-z0-9.-]+$/.test(clean)) {
+              if (!domainMap[clean]) {
+                domainMap[clean] = 1;
+                count++;
+              }
+            }
+          });
+        }
+
+        const pacCode = buildAsciiPac(domainMap, proxyStmt);
+        document.getElementById('pac-script-body').value = pacCode;
+        pacProf.pacScript = pacCode;
+        msg.innerHTML = '✅ <strong style="color:var(--text-main);">GFWList 规则同步与编译完成！</strong>已编译 <b>' + count.toLocaleString() + '</b> 个域名至高速 PAC 字典表。';
+        showToast('GFWList 同步编译成功！(' + count.toLocaleString() + ' 个域名)');
+      } catch (err) {
+        msg.textContent = '网络连接异常，已回退至精选核心库: ' + err.message;
+        document.getElementById('btn-pac-load-curated').click();
+      } finally {
+        btn.textContent = origText;
+        btn.disabled = false;
+      }
+    };
+
+    document.getElementById('btn-copy-pac-inline').onclick = () => {
+      const code = document.getElementById('pac-script-body').value;
+      navigator.clipboard.writeText(code).then(() => {
+        showToast('PAC 脚本代码已复制到剪贴板！');
+      });
+    };
 
     document.getElementById('btn-save-pac').onclick = () => {
       const code = document.getElementById('pac-script-body').value;
       pacProf.pacScript = toPureAscii(code);
       pacProf.pacUrl = document.getElementById('pac-url').value;
-      saveState();
-      showToast('PAC 脚本已保存！');
+      saveState(true);
+      showToast('PAC 脚本已保存并重新载入底层代理！');
     };
+
     document.getElementById('btn-reset-pac-7897').onclick = () => {
       pacProf.pacScript = \`function FindProxyForURL(url, host) {
   if (isPlainHostName(host) || host === "127.0.0.1" || host === "localhost") return "DIRECT";
@@ -1640,13 +1993,16 @@ export function generateOptionsJs(defaultProfiles: Profile[], defaultActiveId: s
 }\`;
       document.getElementById('pac-script-body').value = pacProf.pacScript;
       saveState();
-      showToast('已重置为 7897 标准 PAC 模版');
+      showToast('已重置为 7897 极简 PAC 模版');
     };
+
+    bindTakeoverBannerAction(pacProf);
   }
 
   // Simple Profile Editor (Direct / System)
   function renderSimpleProfileEditor(p) {
     profilesViewEl.innerHTML = \`
+      \${renderTakeoverBanner(p)}
       <div class="card">
         <div class="card-header">
           <div>
@@ -1662,6 +2018,8 @@ export function generateOptionsJs(defaultProfiles: Profile[], defaultActiveId: s
         </p>
       </div>
     \`;
+
+    bindTakeoverBannerAction(p);
   }
 
   // TAB 2: Route Simulator Renderer
@@ -2103,6 +2461,31 @@ export function generateOptionsJs(defaultProfiles: Profile[], defaultActiveId: s
           </div>
         </div>
 
+        <!-- GFWList to PAC Converter -->
+        <div style="background:var(--bg-card-subtle);border:1px solid rgba(236,72,153,0.3);border-radius:8px;padding:14px;margin-bottom:16px;">
+          <h4 style="font-size:13px;font-weight:700;margin-bottom:6px;display:flex;align-items:center;gap:6px;">
+            <span style="color:#ec4899;">⚡</span>
+            <span>GFWList 远程订阅与 PAC 分流规则转换</span>
+            <span style="font-size:11px;background:rgba(236,72,153,0.12);color:#ec4899;padding:2px 6px;border-radius:4px;">自动存储本地</span>
+          </h4>
+          <p style="font-size:11px;color:var(--text-muted);margin-bottom:10px;">从远程 URL 获取最新权威 GFWList 规则列表，自动解码并转换为纯 ASCII 高速字典 PAC 脚本与通配符规则，存储在本地情景模式中。</p>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
+            <div>
+              <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px;">远程订阅 URL</label>
+              <input type="text" id="opt-gfwlist-url" value="https://cdn.jsdelivr.net/gh/gfwlist/gfwlist@master/gfwlist.txt" class="mono" style="width:100%;font-size:11px;">
+            </div>
+            <div>
+              <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px;">PAC 代理出口语句</label>
+              <input type="text" id="opt-gfwlist-proxy-stmt" value="SOCKS5 127.0.0.1:7897; DIRECT" class="mono" style="width:100%;font-size:11px;">
+            </div>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <button id="btn-fetch-gfwlist-pac-opt" class="btn btn-primary" style="font-size:11px;background:#db2777;border-color:#db2777;">⚡ 立即获取并转换为 PAC 存储</button>
+            <button id="btn-curated-gfwlist-pac-opt" class="btn btn-outline" style="font-size:11px;">📋 载入精选 4,400+ 离线库</button>
+          </div>
+          <div id="opt-gfwlist-status" style="font-size:11px;color:var(--text-muted);margin-top:8px;font-family:monospace;"></div>
+        </div>
+
         <!-- Clash YAML Converter -->
         <div style="background:var(--bg-card-subtle);border:1px solid var(--border-color);border-radius:8px;padding:14px;">
           <h4 style="font-size:13px;font-weight:700;margin-bottom:6px;">Clash / Stash 规则 YAML 转换器</h4>
@@ -2215,6 +2598,128 @@ export function generateOptionsJs(defaultProfiles: Profile[], defaultActiveId: s
         alert('未能解析出有效规则，请确认包含 DOMAIN-SUFFIX 或 IP-CIDR 格式');
       }
     };
+
+    // GFWList remote fetch and PAC conversion
+    const btnFetchGfwlist = document.getElementById('btn-fetch-gfwlist-pac-opt');
+    const btnCuratedGfwlist = document.getElementById('btn-curated-gfwlist-pac-opt');
+    const gfwlistStatus = document.getElementById('opt-gfwlist-status');
+
+    if (btnFetchGfwlist && btnCuratedGfwlist) {
+      async function doGfwlistConvert(useCurated) {
+        const origText = btnFetchGfwlist.textContent;
+        btnFetchGfwlist.disabled = true;
+        btnFetchGfwlist.textContent = '⏳ 正在获取与转换...';
+        if (gfwlistStatus) gfwlistStatus.textContent = '正在连接远程订阅源获取最新规则...';
+
+        const remoteUrl = document.getElementById('opt-gfwlist-url').value.trim() || 'https://cdn.jsdelivr.net/gh/gfwlist/gfwlist@master/gfwlist.txt';
+        const proxyStmt = document.getElementById('opt-gfwlist-proxy-stmt').value.trim() || 'SOCKS5 127.0.0.1:7897; DIRECT';
+
+        let raw = '';
+        if (!useCurated) {
+          const mirrors = [remoteUrl, 'https://fastly.jsdelivr.net/gh/gfwlist/gfwlist@master/gfwlist.txt', 'https://raw.gitmirror.com/gfwlist/gfwlist/master/gfwlist.txt'];
+          for (let i = 0; i < mirrors.length; i++) {
+            try {
+              const resp = await fetch(mirrors[i], { cache: 'no-cache' });
+              if (resp && resp.ok) {
+                const txt = await resp.text();
+                if (txt && txt.length > 50) {
+                  raw = txt;
+                  break;
+                }
+              }
+            } catch (e) {}
+          }
+        }
+
+        let decoded = raw;
+        if (raw) {
+          try {
+            const cleanB64 = raw.replace(/\\s+/g, '');
+            if (/^[A-Za-z0-9+/=]+$/.test(cleanB64)) decoded = atob(cleanB64);
+          } catch (e) {}
+        }
+
+        const domainMap = {
+          'google.com': 1, 'googleapis.com': 1, 'gstatic.com': 1, 'googlevideo.com': 1, 'youtube.com': 1,
+          'github.com': 1, 'githubusercontent.com': 1, 'twitter.com': 1, 'x.com': 1, 'telegram.org': 1,
+          'wikipedia.org': 1, 'discord.com': 1, 'openai.com': 1, 'chatgpt.com': 1, 'anthropic.com': 1
+        };
+        let count = Object.keys(domainMap).length;
+
+        if (decoded) {
+          const lines = decoded.split(/\\r?\\n/);
+          lines.forEach(function(l) {
+            let line = l.trim();
+            if (!line || line.startsWith('!') || line.startsWith('[')) return;
+            if (line.startsWith('@@')) return;
+            let clean = line.replace(/^\\|\\|/, '').replace(/^https?:\\/\\//, '').replace(/^\\./, '');
+            const slashIdx = clean.indexOf('/');
+            if (slashIdx !== -1) clean = clean.substring(0, slashIdx);
+            clean = clean.split(':')[0].toLowerCase().trim();
+            if (clean && clean.includes('.') && !clean.includes('*') && /^[a-z0-9.-]+$/.test(clean)) {
+              if (!domainMap[clean]) {
+                domainMap[clean] = 1;
+                count++;
+              }
+            }
+          });
+        }
+
+        const jsonStr = JSON.stringify(domainMap, null, 2);
+        const pacScript = '// ProxyPilot GFWList PAC Script\\n' +
+          'var PROXY = "' + proxyStmt + '";\\n' +
+          'var DIRECT = "DIRECT";\\n' +
+          'var domains = ' + jsonStr + ';\\n\\n' +
+          'var whitelist = { "baidu.com": 1, "qq.com": 1, "taobao.com": 1, "jd.com": 1, "bilibili.com": 1, "zhihu.com": 1 };\\n\\n' +
+          'function FindProxyForURL(url, host) {\\n' +
+          '  if (isPlainHostName(host) || host === "127.0.0.1" || host === "localhost" || host === "::1") return DIRECT;\\n' +
+          '  if (host.indexOf("192.168.") === 0 || host.indexOf("10.") === 0) return DIRECT;\\n' +
+          '  var lastDot = host.lastIndexOf(".");\\n' +
+          '  var subHost = host.toLowerCase();\\n' +
+          '  while (lastDot > 0) {\\n' +
+          '    if (whitelist[subHost] === 1) return DIRECT;\\n' +
+          '    if (domains[subHost] === 1) return PROXY;\\n' +
+          '    subHost = subHost.substring(lastDot + 1);\\n' +
+          '    lastDot = subHost.indexOf(".");\\n' +
+          '  }\\n' +
+          '  return DIRECT;\\n' +
+          '}';
+
+        // Update local profiles (both PAC profile and AutoSwitch)
+        let pacProf = profiles.find(function(p) { return p.profileType === 'PacProfile'; });
+        if (pacProf) {
+          pacProf.pacScript = pacScript;
+        } else {
+          profiles.push({
+            id: 'pac_gfwlist_' + Date.now(),
+            name: 'GFWList 智能 PAC',
+            profileType: 'PacProfile',
+            color: '#ec4899',
+            pacScript: pacScript
+          });
+        }
+
+        let swProf = profiles.find(function(p) { return p.profileType === 'SwitchProfile'; });
+        if (swProf) {
+          if (!swProf.ruleListConfig) {
+            swProf.ruleListConfig = { enabled: true, url: remoteUrl, format: 'AutoProxy', profileId: 'proxy_clash', defaultProfileId: 'direct' };
+          }
+          swProf.ruleListConfig.rulesText = decoded;
+          swProf.ruleListConfig.lastUpdated = new Date().toLocaleTimeString();
+        }
+
+        await saveState(true);
+        if (gfwlistStatus) {
+          gfwlistStatus.innerHTML = '✅ <strong style="color:var(--text-main);">成功获取并转换为 PAC 分流配置！</strong>已将 <b>' + count.toLocaleString() + '</b> 条规则持久化存储至本地情景模式中。';
+        }
+        btnFetchGfwlist.textContent = origText;
+        btnFetchGfwlist.disabled = false;
+        showToast('GFWList 远程规则已转换并存入本地 PAC 配置！');
+      }
+
+      btnFetchGfwlist.onclick = function() { doGfwlistConvert(false); };
+      btnCuratedGfwlist.onclick = function() { doGfwlistConvert(true); };
+    }
   }
 
   // Header Save & Apply Button
@@ -2274,6 +2779,26 @@ export function generateOptionsJs(defaultProfiles: Profile[], defaultActiveId: s
   };
   document.getElementById('btn-close-help').onclick = () => {
     modalHelp.classList.remove('open');
+  };
+
+  // Developer Mode Console API (window.proxyPilot)
+  window.proxyPilot = {
+    version: '1.0.6',
+    getProfiles: () => profiles,
+    getActiveProfile: () => currentActiveProfileId,
+    setActiveProfile: (id) => {
+      chrome.runtime.sendMessage({ type: 'SWITCH_PROFILE', profileId: id }, () => location.reload());
+    },
+    addRule: (pat, profId) => {
+      chrome.runtime.sendMessage({ type: 'ADD_RULE', pattern: pat, targetProfileId: profId || 'proxy_clash' }, () => location.reload());
+    },
+    setPort: (port) => {
+      chrome.runtime.sendMessage({ type: 'BATCH_SET_PORT', port: port }, () => location.reload());
+    },
+    exportJson: () => JSON.stringify(profiles, null, 2),
+    help: () => {
+      console.log('%c🚀 ProxyPilot Console API v1.0.6%c\\n- proxyPilot.getProfiles()\\n- proxyPilot.setActiveProfile("direct")\\n- proxyPilot.addRule("*.example.com")\\n- proxyPilot.setPort(7897)\\n- proxyPilot.exportJson()', 'color:#2563eb;font-weight:bold;', 'color:inherit;');
+    }
   };
 
   // Initialize

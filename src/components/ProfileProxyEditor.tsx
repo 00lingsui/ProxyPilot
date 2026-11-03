@@ -15,12 +15,16 @@ interface ProfileProxyEditorProps {
   profile: FixedProfile;
   onChange: (updated: FixedProfile) => void;
   onDeleteProfile: (id: string) => void;
+  isActive?: boolean;
+  onSetActive?: () => void;
 }
 
 export const ProfileProxyEditor: React.FC<ProfileProxyEditorProps> = ({
   profile,
   onChange,
   onDeleteProfile,
+  isActive = false,
+  onSetActive,
 }) => {
   const [showAuth, setShowAuth] = useState(
     Boolean(profile.fallbackProxy.auth?.username || profile.fallbackProxy.auth?.password)
@@ -121,6 +125,53 @@ export const ProfileProxyEditor: React.FC<ProfileProxyEditorProps> = ({
 
   return (
     <div className="space-y-6">
+      {/* Proxy Takeover Status Card */}
+      {isActive ? (
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-800 text-emerald-900 dark:text-emerald-100 shadow-2xs">
+          <div className="flex items-center gap-2.5">
+            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+            <div>
+              <div className="font-bold text-xs flex items-center gap-1.5">
+                <span>✅ 当前浏览器正由此情景模式接管运行</span>
+                <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-emerald-200 dark:bg-emerald-800 text-emerald-900 dark:text-emerald-200 font-semibold">
+                  ACTIVE
+                </span>
+              </div>
+              <p className="text-[11px] text-emerald-700 dark:text-emerald-300 mt-0.5">
+                协议节点: {profile.fallbackProxy.scheme.toUpperCase()}://{profile.fallbackProxy.host || '127.0.0.1'}:{profile.fallbackProxy.port || 7897} | 流量全量路由中
+              </p>
+            </div>
+          </div>
+          <span className="self-end sm:self-center text-[11px] font-medium text-emerald-700 dark:text-emerald-300">
+            全网流量代理中
+          </span>
+        </div>
+      ) : (
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-xl bg-blue-50/70 dark:bg-slate-800/80 border border-blue-200 dark:border-slate-700 shadow-2xs">
+          <div className="flex items-center gap-2.5">
+            <span className="w-2.5 h-2.5 rounded-full bg-slate-400 shrink-0" />
+            <div>
+              <div className="font-bold text-xs text-slate-800 dark:text-slate-200">
+                ○ 当前未接管浏览器代理
+              </div>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                此情景模式已就绪。点击右侧按钮可立即接管 Chrome 底层代理。
+              </p>
+            </div>
+          </div>
+          {onSetActive && (
+            <button
+              onClick={onSetActive}
+              className="self-end sm:self-center flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow-xs hover:shadow-sm transition-all transform active:scale-95 shrink-0"
+              title="立即将浏览器代理切换至此情景模式"
+            >
+              <Zap className="w-3.5 h-3.5" />
+              <span>⚡ 设为当前代理并接管浏览器</span>
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Profile Header Card */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-200 dark:border-slate-800">
         <div>

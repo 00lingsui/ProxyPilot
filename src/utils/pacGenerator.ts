@@ -111,6 +111,21 @@ ${bypassLines || '  // No bypass rules configured'}
       } else if (rule.conditionType === 'SchemeCondition') {
         const schemeStr = cleanPattern.replace(/:$/, '').trim().toLowerCase();
         ruleCodeBlocks.push(`${comment}\n  if (url.indexOf("${schemeStr}:") === 0) {\n    return "${targetRet}";\n  }`);
+      } else if (rule.conditionType === 'ResourceTypeCondition') {
+        const rt = cleanPattern.toLowerCase();
+        if (rt.includes('image')) {
+          ruleCodeBlocks.push(`${comment}\n  if (/\\.(png|jpe?g|gif|webp|svg|ico)(\\?.*)?$/i.test(url)) {\n    return "${targetRet}";\n  }`);
+        } else if (rt.includes('media') || rt.includes('video')) {
+          ruleCodeBlocks.push(`${comment}\n  if (/\\.(mp4|webm|m3u8|ts|mp3|ogg|flv|wav)(\\?.*)?$/i.test(url)) {\n    return "${targetRet}";\n  }`);
+        } else if (rt.includes('script') || rt.includes('js')) {
+          ruleCodeBlocks.push(`${comment}\n  if (/\\.js(\\?.*)?$/i.test(url)) {\n    return "${targetRet}";\n  }`);
+        } else if (rt.includes('style') || rt.includes('css')) {
+          ruleCodeBlocks.push(`${comment}\n  if (/\\.css(\\?.*)?$/i.test(url)) {\n    return "${targetRet}";\n  }`);
+        } else if (rt.includes('ws') || rt.includes('websocket')) {
+          ruleCodeBlocks.push(`${comment}\n  if (/^wss?:/i.test(url)) {\n    return "${targetRet}";\n  }`);
+        } else {
+          ruleCodeBlocks.push(`${comment}\n  if (shExpMatch(url, "${cleanPattern}")) {\n    return "${targetRet}";\n  }`);
+        }
       }
     }
 
@@ -157,8 +172,25 @@ ${bypassLines || '  // No bypass rules configured'}
 // Standard FindProxyForURL compliant with Chromium, Firefox, WebKit (Strict ASCII)
 
 function FindProxyForURL(url, host) {
-  // Built-in local exclusions
-  if (isPlainHostName(host) || host === "127.0.0.1" || host === "localhost" || host === "::1") {
+  // === Mandatory Security Direct Whitelist (Never Proxy) ===
+  // Prevents sensitive intranet, government, university, and financial traffic from leaking to proxy
+  if (
+    isPlainHostName(host) || 
+    host === "127.0.0.1" || 
+    host === "localhost" || 
+    host === "::1" ||
+    shExpMatch(host, "*.gov.cn") || 
+    shExpMatch(host, "*.edu.cn") ||
+    shExpMatch(host, "*.icbc.com.cn") ||
+    shExpMatch(host, "*.ccb.com") ||
+    shExpMatch(host, "*.boc.cn") ||
+    shExpMatch(host, "*.abchina.com") ||
+    shExpMatch(host, "*.cmbchina.com") ||
+    shExpMatch(host, "*.alipay.com") ||
+    isInNet(dnsResolve(host), "10.0.0.0", "255.0.0.0") ||
+    isInNet(dnsResolve(host), "172.16.0.0", "255.240.0.0") ||
+    isInNet(dnsResolve(host), "192.168.0.0", "255.255.0.0")
+  ) {
     return "DIRECT";
   }
 

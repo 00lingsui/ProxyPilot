@@ -17,7 +17,7 @@ export async function generateExtensionZip(profiles: Profile[], activeProfileId:
     manifest_version: 3,
     name: "ProxyPilot",
     short_name: "ProxyPilot",
-    version: "1.0.4",
+    version: "1.0.6",
     description: "Lightweight, powerful browser proxy automation suite for desktop & mobile (Chrome, Edge, Kiwi).",
     permissions: [
       "proxy",
@@ -43,6 +43,13 @@ export async function generateExtensionZip(profiles: Profile[], activeProfileId:
           "mac": "Alt+Shift+X"
         },
         "description": "循环切换生效情景模式 (Cycle Profile)"
+      },
+      "toggle-direct-proxy": {
+        "suggested_key": {
+          "default": "Alt+Shift+P",
+          "mac": "Alt+Shift+P"
+        },
+        "description": "在自动切换与代理模式间一键切换 (Toggle Auto/Proxy)"
       }
     },
     options_ui: {
@@ -170,6 +177,21 @@ function buildPacScriptForProfile(target, allProfiles) {
       } else if (r.conditionType === 'SchemeCondition') {
         var schemeStr = cleanPat.replace(/:$/, '').trim().toLowerCase();
         ruleLines.push('  // Rule ' + (i + 1) + ' Scheme\\n  if (url.indexOf("' + schemeStr + ':") === 0) return "' + targetRet + '";');
+      } else if (r.conditionType === 'ResourceTypeCondition') {
+        var rt = cleanPat.toLowerCase();
+        if (rt.indexOf('image') !== -1) {
+          ruleLines.push('  // Rule ' + (i + 1) + ' Resource Type (Image)\\n  if (/\\.(png|jpe?g|gif|webp|svg|ico)(\\?.*)?$/i.test(url)) return "' + targetRet + '";');
+        } else if (rt.indexOf('media') !== -1 || rt.indexOf('video') !== -1) {
+          ruleLines.push('  // Rule ' + (i + 1) + ' Resource Type (Media)\\n  if (/\\.(mp4|webm|m3u8|ts|mp3|ogg|flv|wav)(\\?.*)?$/i.test(url)) return "' + targetRet + '";');
+        } else if (rt.indexOf('script') !== -1 || rt.indexOf('js') !== -1) {
+          ruleLines.push('  // Rule ' + (i + 1) + ' Resource Type (Script)\\n  if (/\\.js(\\?.*)?$/i.test(url)) return "' + targetRet + '";');
+        } else if (rt.indexOf('style') !== -1 || rt.indexOf('css') !== -1) {
+          ruleLines.push('  // Rule ' + (i + 1) + ' Resource Type (CSS)\\n  if (/\\.css(\\?.*)?$/i.test(url)) return "' + targetRet + '";');
+        } else if (rt.indexOf('ws') !== -1 || rt.indexOf('websocket') !== -1) {
+          ruleLines.push('  // Rule ' + (i + 1) + ' Resource Type (WebSocket)\\n  if (/^wss?:/i.test(url)) return "' + targetRet + '";');
+        } else {
+          ruleLines.push('  // Rule ' + (i + 1) + ' Resource Type\\n  if (shExpMatch(url, "' + cleanPat + '")) return "' + targetRet + '";');
+        }
       }
     }
 
@@ -205,8 +227,12 @@ function buildPacScriptForProfile(target, allProfiles) {
 
     return '// ProxyPilot PAC Script - Auto Switch\\n' +
       'function FindProxyForURL(url, host) {\\n' +
-      '  // Local host bypass\\n' +
-      '  if (isPlainHostName(host) || host === "127.0.0.1" || host === "localhost" || host === "::1") {\\n' +
+      '  // Mandatory Security Direct Whitelist (Never Proxy)\\n' +
+      '  if (isPlainHostName(host) || host === "127.0.0.1" || host === "localhost" || host === "::1" || ' +
+      'shExpMatch(host, "*.gov.cn") || shExpMatch(host, "*.edu.cn") || ' +
+      'shExpMatch(host, "*.icbc.com.cn") || shExpMatch(host, "*.ccb.com") || shExpMatch(host, "*.boc.cn") || ' +
+      'shExpMatch(host, "*.abchina.com") || shExpMatch(host, "*.cmbchina.com") || shExpMatch(host, "*.alipay.com") || ' +
+      'isInNet(dnsResolve(host), "10.0.0.0", "255.0.0.0") || isInNet(dnsResolve(host), "172.16.0.0", "255.240.0.0") || isInNet(dnsResolve(host), "192.168.0.0", "255.255.0.0")) {\\n' +
       '    return "DIRECT";\\n' +
       '  }\\n\\n' +
       ruleLines.join('\\n\\n') +
@@ -231,6 +257,68 @@ function buildPacScriptForProfile(target, allProfiles) {
   return '// ProxyPilot Fallback\\nfunction FindProxyForURL(url, host) { return "DIRECT"; }';
 }
 
+// Update Extension Icon Badge & Tooltip
+function updateActionBadge(target) {
+  if (!chrome.action) return;
+  let badgeText = '7897';
+  let badgeColor = '#10b981';
+  if (target.profileType === 'DirectProfile') {
+    badgeText = 'DIR';
+    badgeColor = '#64748b';
+  } else if (target.profileType === 'SystemProfile') {
+    badgeText = 'SYS';
+    badgeColor = '#0284c7';
+  } else if (target.profileType === 'SwitchProfile') {
+    badgeText = 'AUTO';
+    badgeColor = '#f59e0b';
+  } else if (target.profileType === 'PacProfile') {
+    badgeText = 'PAC';
+    badgeColor = '#8b5cf6';
+  } else if (target.profileType === 'FixedProfile' && target.fallbackProxy) {
+    badgeText = String(target.fallbackProxy.port || '7897');
+    badgeColor = '#10b981';
+  }
+
+  try {
+    if (chrome.action.setBadgeText) chrome.action.setBadgeText({ text: badgeText });
+    if (chrome.action.setBadgeBackgroundColor) chrome.action.setBadgeBackgroundColor({ color: badgeColor });
+    if (chrome.action.setTitle) {
+      chrome.action.setTitle({
+        title: 'ProxyPilot (当前已接管浏览器代理: ' + target.name + ' [' + badgeText + '])'
+      });
+    }
+  } catch (e) {}
+}
+
+let lastControlStatus = {
+  levelOfControl: 'controllable_by_this_extension',
+  activeProfileId: currentActiveProfileId,
+  warningMessage: ''
+};
+
+function verifyProxyControl(label) {
+  if (chrome.proxy && chrome.proxy.settings && chrome.proxy.settings.get) {
+    chrome.proxy.settings.get({ incognito: false }, (details) => {
+      const loc = details ? details.levelOfControl : 'unknown';
+      let warn = '';
+      if (loc === 'controlled_by_other_extensions') {
+        warn = '检测到浏览器中安装了其他代理扩展（如 SwitchyOmega、Clash Verge 等），正在占用代理控制权。请在 chrome://extensions 临时禁用其他代理插件。';
+        console.warn('[ProxyPilot] Warning:', warn);
+      } else if (loc === 'not_controllable') {
+        warn = '浏览器代理被系统或企业策略锁定，无法由扩展程序修改。';
+        console.warn('[ProxyPilot] Warning:', warn);
+      } else {
+        console.log('[ProxyPilot] Verified: ProxyPilot is in full control of browser proxy settings (' + loc + ')');
+      }
+      lastControlStatus = {
+        levelOfControl: loc,
+        activeProfileId: currentActiveProfileId,
+        warningMessage: warn
+      };
+    });
+  }
+}
+
 // Safely apply proxy settings and inspect chrome.runtime.lastError
 function setChromeProxy(config, label) {
   if (!chrome.proxy || !chrome.proxy.settings) {
@@ -244,7 +332,8 @@ function setChromeProxy(config, label) {
     if (chrome.runtime.lastError) {
       console.error('[ProxyPilot] Error applying proxy (' + label + '):', chrome.runtime.lastError.message);
     } else {
-      console.log('[ProxyPilot] Successfully applied proxy settings:', label);
+      console.log('[ProxyPilot] Successfully applied proxy settings to browser:', label);
+      verifyProxyControl(label);
     }
   });
 }
@@ -258,7 +347,8 @@ async function applyProxySettings(profileId) {
   const allProfiles = stored.profiles || DEFAULT_PROFILES;
   const target = allProfiles.find(p => p.id === profileId) || allProfiles[0];
 
-  console.log('[ProxyPilot] Switching to profile:', target.name, target.profileType);
+  console.log('[ProxyPilot] Switching and taking over browser proxy with profile:', target.name, target.profileType);
+  updateActionBadge(target);
 
   if (target.profileType === 'DirectProfile') {
     setChromeProxy({ mode: 'direct' }, 'Direct Mode');
@@ -379,8 +469,37 @@ if (chrome.commands && chrome.commands.onCommand) {
           chrome.action.setBadgeBackgroundColor({ color: nextProfile.color || '#2563eb' });
         }
       }
+    } else if (command === 'toggle-direct-proxy') {
+      const stored = await chrome.storage.local.get(['profiles', 'activeProfileId']);
+      const currentId = stored.activeProfileId || currentActiveProfileId;
+      const targetId = currentId === 'auto_switch' ? 'proxy_clash' : (currentId === 'direct' ? 'auto_switch' : 'direct');
+      await applyProxySettings(targetId);
+      if (chrome.action && chrome.action.setBadgeText) {
+        chrome.action.setBadgeText({ text: targetId.slice(0, 3) });
+      }
     }
   });
+}
+
+// Auto-Learn Failure Monitor (Captures connection reset / timed out for Smart Routing)
+const autoLearnFailures = [];
+if (chrome.webRequest && chrome.webRequest.onErrorOccurred) {
+  chrome.webRequest.onErrorOccurred.addListener((details) => {
+    try {
+      const u = new URL(details.url);
+      const h = u.hostname;
+      if (h && !h.endsWith('.gov.cn') && !h.endsWith('.edu.cn') && !autoLearnFailures.some(f => f.host === h)) {
+        autoLearnFailures.unshift({
+          id: 'fail_' + Date.now(),
+          host: h,
+          url: details.url,
+          error: details.error,
+          timestamp: Date.now()
+        });
+        if (autoLearnFailures.length > 50) autoLearnFailures.pop();
+      }
+    } catch (e) {}
+  }, { urls: ['<all_urls>'] });
 }
 
 // Tab Overrides Dictionary (tabId -> { profileId, expireAt })
@@ -401,9 +520,31 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     });
     return true;
   }
+  if (request.type === 'GET_PROXY_CONTROL_STATUS') {
+    if (chrome.proxy && chrome.proxy.settings && chrome.proxy.settings.get) {
+      chrome.proxy.settings.get({ incognito: false }, (details) => {
+        const loc = (details && details.levelOfControl) || 'unknown';
+        let warn = '';
+        if (loc === 'controlled_by_other_extensions') {
+          warn = '检测到其他代理插件正在占用浏览器代理控制权，请在 chrome://extensions 中关闭其他代理扩展。';
+        } else if (loc === 'not_controllable') {
+          warn = '浏览器代理被系统或企业组策略锁定。';
+        }
+        sendResponse({
+          levelOfControl: loc,
+          isControlledByThisExtension: loc === 'controlled_by_this_extension',
+          activeProfileId: currentActiveProfileId,
+          warningMessage: warn
+        });
+      });
+    } else {
+      sendResponse(lastControlStatus);
+    }
+    return true;
+  }
   if (request.type === 'SWITCH_PROFILE') {
     applyProxySettings(request.profileId).then(() => {
-      sendResponse({ success: true });
+      sendResponse({ success: true, activeProfileId: request.profileId });
     });
     return true;
   }
@@ -425,6 +566,26 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.type === 'CLEAR_REQUEST_LOGS') {
     requestLogs.length = 0;
     sendResponse({ success: true });
+    return true;
+  }
+  if (request.type === 'GET_AUTO_LEARN_FAILURES') {
+    sendResponse({ failures: autoLearnFailures });
+    return true;
+  }
+  if (request.type === 'BATCH_SET_PORT') {
+    chrome.storage.local.get(['profiles', 'activeProfileId'], (res) => {
+      const all = res.profiles || DEFAULT_PROFILES;
+      const port = parseInt(request.port || 7897, 10);
+      for (let i = 0; i < all.length; i++) {
+        if (all[i].profileType === 'FixedProfile' && all[i].fallbackProxy) {
+          all[i].fallbackProxy.port = port;
+        }
+      }
+      chrome.storage.local.set({ profiles: all }, async () => {
+        await applyProxySettings(res.activeProfileId || currentActiveProfileId);
+        sendResponse({ success: true, profiles: all });
+      });
+    });
     return true;
   }
   if (request.type === 'SAVE_STATE') {
@@ -619,6 +780,16 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     <span id="status-badge" style="font-size:11px;color:#10b981;font-weight:700;">ACTIVE (7897)</span>
   </div>
 
+  <!-- Conflict Alert Banner -->
+  <div id="conflict-alert" style="display:none;background:#fef2f2;border:1px solid #fecaca;color:#991b1b;border-radius:8px;padding:8px 10px;font-size:11px;margin-bottom:10px;line-height:1.4;">
+    <strong>⚠️ 代理权冲突：</strong>检测到其他代理插件（如 SwitchyOmega）正在占用浏览器控制权，请在 <code>chrome://extensions</code> 中关闭冲突扩展。
+  </div>
+
+  <!-- Takeover Feedback Toast -->
+  <div id="takeover-msg" style="display:none;background:#ecfdf5;border:1px solid #a7f3d0;color:#065f46;border-radius:8px;padding:8px 10px;font-size:11px;margin-bottom:10px;font-weight:600;text-align:center;">
+    ⚡ 正在接管浏览器代理...
+  </div>
+
   <div class="domain-label">当前网页域名</div>
   <div id="domain-display" class="current-domain">loading...</div>
 
@@ -632,7 +803,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   </div>
 
   <div class="domain-label" style="display:flex;justify-content:space-between;">
-    <span>情景模式切换</span>
+    <span>情景模式切换 (点击即接管)</span>
     <span style="font-size:10px;font-weight:normal;color:#94a3b8;">快捷键: Alt+Shift+X</span>
   </div>
   <div id="profile-container" class="profiles-list"></div>
@@ -657,6 +828,17 @@ let currentUrl = '';
 let currentTabId = null;
 
 document.addEventListener('DOMContentLoaded', async () => {
+  // Query proxy control status
+  chrome.runtime.sendMessage({ type: 'GET_PROXY_CONTROL_STATUS' }, (statusRes) => {
+    if (statusRes && statusRes.warningMessage) {
+      const conflictEl = document.getElementById('conflict-alert');
+      if (conflictEl) {
+        conflictEl.style.display = 'block';
+        conflictEl.innerHTML = '<strong>⚠️ 代理权冲突：</strong>' + statusRes.warningMessage;
+      }
+    }
+  });
+
   // Query active tab
   chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
     if (tabs && tabs[0] && tabs[0].url) {
@@ -680,17 +862,31 @@ document.addEventListener('DOMContentLoaded', async () => {
     const container = document.getElementById('profile-container');
     container.innerHTML = '';
 
+    const curActive = res.profiles.find(p => p.id === res.activeProfileId);
+    const statusBadge = document.getElementById('status-badge');
+    if (statusBadge && curActive) {
+      statusBadge.textContent = curActive.name.substring(0, 14);
+    }
+
     res.profiles.forEach(p => {
+      const isAct = p.id === res.activeProfileId;
       const div = document.createElement('div');
-      div.className = 'profile-item' + (p.id === res.activeProfileId ? ' active' : '');
+      div.className = 'profile-item' + (isAct ? ' active' : '');
       div.innerHTML = \`
         <span class="color-dot" style="background: \${p.color || '#3b82f6'}"></span>
         <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;">\${p.name}</span>
-        \${p.id === res.activeProfileId ? '<span style="color:#2563eb;font-weight:bold;">✓</span>' : ''}
+        \${isAct ? '<span style="color:#10b981;font-weight:bold;font-size:11px;">● 已接管</span>' : '<span style="font-size:11px;color:#94a3b8;">设为代理</span>'}
       \`;
       div.onclick = () => {
+        const takeoverMsg = document.getElementById('takeover-msg');
+        if (takeoverMsg) {
+          takeoverMsg.style.display = 'block';
+          takeoverMsg.textContent = '⚡ 正在将浏览器代理切换至: ' + p.name + '...';
+        }
         chrome.runtime.sendMessage({ type: 'SWITCH_PROFILE', profileId: p.id }, () => {
-          window.location.reload();
+          setTimeout(() => {
+            window.location.reload();
+          }, 200);
         });
       };
       container.appendChild(div);
@@ -736,12 +932,61 @@ document.addEventListener('DOMContentLoaded', async () => {
 `;
   zip.file("popup.js", popupJs);
 
-  // 5. options.html & options.js (Full rich interactive dashboard matching AI Studio design)
-  const optionsHtml = generateOptionsHtml();
-  zip.file("options.html", optionsHtml);
+  // 5. options.html & assets (Package the EXACT React SPA application identical to the preview window)
+  let packagedReactOptions = false;
+  try {
+    if (typeof window !== 'undefined' && typeof window.fetch === 'function') {
+      const manifestResp = await fetch('/extension-build/assets-manifest.json');
+      if (manifestResp.ok) {
+        const manifest = await manifestResp.json();
+        const htmlResp = await fetch('/extension-build/options.html');
+        if (htmlResp.ok) {
+          const htmlContent = await htmlResp.text();
+          zip.file("options.html", htmlContent);
+          
+          if (Array.isArray(manifest.assets)) {
+            for (const assetName of manifest.assets) {
+              const assetResp = await fetch('/extension-build/assets/' + assetName);
+              if (assetResp.ok) {
+                const assetContent = await assetResp.text();
+                zip.file("assets/" + assetName, assetContent);
+              }
+            }
+          }
+          packagedReactOptions = true;
+        }
+      }
+    } else if (typeof process !== 'undefined') {
+      // Node environment
+      const fs = await import('fs');
+      const path = await import('path');
+      const targetDir = path.resolve(process.cwd(), 'public/extension-build');
+      const optHtmlPath = path.join(targetDir, 'options.html');
+      if (fs.existsSync(optHtmlPath)) {
+        const html = fs.readFileSync(optHtmlPath, 'utf-8');
+        zip.file("options.html", html);
+        const assetsDir = path.join(targetDir, 'assets');
+        if (fs.existsSync(assetsDir)) {
+          const files = fs.readdirSync(assetsDir);
+          for (const f of files) {
+            const assetContent = fs.readFileSync(path.join(assetsDir, f), 'utf-8');
+            zip.file("assets/" + f, assetContent);
+          }
+        }
+        packagedReactOptions = true;
+      }
+    }
+  } catch (e) {
+    console.warn('[ProxyPilot] Could not package compiled React options build, using fallback template:', e);
+  }
 
-  const optionsJs = generateOptionsJs(profiles, activeProfileId);
-  zip.file("options.js", optionsJs);
+  // Fallback if react build could not be fetched
+  if (!packagedReactOptions) {
+    const optionsHtml = generateOptionsHtml();
+    zip.file("options.html", optionsHtml);
+    const optionsJs = generateOptionsJs(profiles, activeProfileId);
+    zip.file("options.js", optionsJs);
+  }
 
   // 6. proxy.pac
   zip.file("proxy.pac", pacCode);
@@ -761,7 +1006,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 2. 点击右上角菜单按钮 **\`⋮\`** -> 选择 **「扩展程序」(Extensions)**。
 3. 勾选右上角 **「开发者模式」(Developer Mode)** 开关。
 4. 点击左上角的 **\`+ (from .zip / .crx / .user.js)\`** 按钮。
-5. 在手机文件选择器中，直接选择刚刚下载的 **\`ProxyPilot-Chrome-Extension-v1.0.4.zip\`**（Kiwi 原生支持直接安装 ZIP，**无需解压**！）。
+5. 在手机文件选择器中，直接选择刚刚下载的 **\`ProxyPilot-Chrome-Extension-v1.0.6.zip\`**（Kiwi 原生支持直接安装 ZIP，**无需解压**！）。
 6. 安装完成！点击 Kiwi 菜单栏最底部的 ProxyPilot 即可在手机上像电脑一样一键切换分流和管理规则！
 
 ---

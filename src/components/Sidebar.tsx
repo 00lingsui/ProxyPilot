@@ -8,9 +8,12 @@ import {
   FileCode,
   Shuffle,
   Cpu,
-  X
+  X,
+  Zap,
+  ShieldCheck,
+  Sliders
 } from 'lucide-react';
-import { Profile } from '../types/omega';
+import { Profile, ProxyHealthStatus } from '../types/omega';
 
 interface SidebarProps {
   profiles: Profile[];
@@ -21,6 +24,11 @@ interface SidebarProps {
   onOpenNewProfileModal: () => void;
   onOpenBackupModal: () => void;
   onOpenDocsModal: () => void;
+  onOpenWorkspaces?: () => void;
+  onOpenSecurityWhitelist?: () => void;
+  onPingAll?: () => void;
+  healthStatus?: Record<string, ProxyHealthStatus>;
+  isTestingPing?: boolean;
   isMobileDrawerOpen?: boolean;
   onCloseMobileDrawer?: () => void;
 }
@@ -34,6 +42,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onOpenNewProfileModal,
   onOpenBackupModal,
   onOpenDocsModal,
+  onOpenWorkspaces,
+  onOpenSecurityWhitelist,
+  onPingAll,
+  healthStatus,
+  isTestingPing = false,
   isMobileDrawerOpen = false,
   onCloseMobileDrawer,
 }) => {
@@ -78,12 +91,23 @@ export const Sidebar: React.FC<SidebarProps> = ({
           情景模式 (PROFILES)
         </span>
         <div className="flex items-center gap-1">
+          {onPingAll && (
+            <button
+              onClick={onPingAll}
+              disabled={isTestingPing}
+              className="min-h-[28px] flex items-center gap-1 px-2 py-0.5 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/50 rounded transition-colors disabled:opacity-50"
+              title="测速所有代理节点延迟"
+            >
+              <Zap className={`w-3 h-3 ${isTestingPing ? 'animate-bounce' : ''}`} />
+              <span>{isTestingPing ? '测速中' : '测速'}</span>
+            </button>
+          )}
           <button
             onClick={onOpenNewProfileModal}
-            className="min-h-[32px] flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-950/50 rounded transition-colors"
+            className="min-h-[28px] flex items-center gap-1 px-2 py-0.5 text-[11px] font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-950/50 rounded transition-colors"
             title="新建情景模式"
           >
-            <Plus className="w-3.5 h-3.5" />
+            <Plus className="w-3 h-3" />
             <span>新建</span>
           </button>
           {onCloseMobileDrawer && (
@@ -102,6 +126,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {profiles.map(profile => {
           const isSelected = profile.id === selectedProfileId;
           const isActive = profile.id === activeProfileId;
+          const health = healthStatus?.[profile.id];
 
           return (
             <div
@@ -111,7 +136,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 if (onCloseMobileDrawer) onCloseMobileDrawer();
               }}
               className={`group min-h-[44px] flex items-center justify-between px-3 py-2 rounded-lg text-xs cursor-pointer transition-all border ${
-                isSelected
+                isActive
+                  ? 'bg-emerald-50/70 dark:bg-emerald-950/40 border-emerald-500/60 text-slate-900 dark:text-white font-medium'
+                  : isSelected
                   ? 'bg-white dark:bg-slate-800 border-blue-500 text-slate-900 dark:text-white shadow-xs font-medium'
                   : 'border-transparent text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/60 hover:text-slate-900 dark:hover:text-white'
               }`}
@@ -125,14 +152,43 @@ export const Sidebar: React.FC<SidebarProps> = ({
               </div>
 
               <div className="flex items-center gap-1.5 shrink-0">
-                <span className="text-[10px] text-slate-400 dark:text-slate-500 group-hover:text-slate-500 dark:group-hover:text-slate-400">
-                  {getProfileTypeBadge(profile.profileType)}
-                </span>
-                {isActive && (
+                {profile.profileType === 'FixedProfile' && health && (
+                  <span className={`text-[10px] font-mono px-1 py-0.2 rounded ${
+                    health.status === 'online' 
+                      ? 'text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 font-semibold' 
+                      : health.status === 'warning'
+                      ? 'text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/60 font-semibold'
+                      : 'text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/60 font-semibold'
+                  }`}>
+                    {health.status === 'online' ? `● ${health.latencyMs}ms` : health.status === 'warning' ? `▲ ${health.latencyMs}ms` : '✕ 离线'}
+                  </span>
+                )}
+
+                {isActive ? (
                   <span 
-                    className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" 
-                    title="当前浏览器正使用此情景模式"
-                  />
+                    className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-500 text-white shadow-2xs"
+                    title="当前浏览器全网流量正由此模式接管"
+                  >
+                    <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+                    <span>生效中</span>
+                  </span>
+                ) : (
+                  <div className="flex items-center gap-1">
+                    <span className="text-[10px] text-slate-400 dark:text-slate-500 group-hover:hidden">
+                      {getProfileTypeBadge(profile.profileType)}
+                    </span>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onSetActiveProfile(profile.id);
+                      }}
+                      className="hidden group-hover:inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-blue-600 hover:bg-blue-700 text-white shadow-2xs transition-transform active:scale-95"
+                      title="立即切换并设为此代理接管浏览器"
+                    >
+                      <Zap className="w-2.5 h-2.5" />
+                      <span>接管</span>
+                    </button>
+                  </div>
                 )}
               </div>
             </div>
@@ -140,18 +196,45 @@ export const Sidebar: React.FC<SidebarProps> = ({
         })}
       </div>
 
+
       {/* Settings & Tools Bottom Bar */}
       <div className="p-3 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 space-y-1 shrink-0 pb-18 md:pb-3">
         <div className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1.5 px-2">
-          配置与帮助
+          预设与安全防护
         </div>
+
+        {onOpenWorkspaces && (
+          <button
+            onClick={() => {
+              onOpenWorkspaces();
+              if (onCloseMobileDrawer) onCloseMobileDrawer();
+            }}
+            className="w-full min-h-[38px] flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+          >
+            <Sliders className="w-4 h-4 text-blue-500" />
+            <span className="font-medium">工作空间与场景 (Scenes)</span>
+          </button>
+        )}
+
+        {onOpenSecurityWhitelist && (
+          <button
+            onClick={() => {
+              onOpenSecurityWhitelist();
+              if (onCloseMobileDrawer) onCloseMobileDrawer();
+            }}
+            className="w-full min-h-[38px] flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+          >
+            <ShieldCheck className="w-4 h-4 text-emerald-500" />
+            <span className="font-medium">绝对直连白名单 (Never Proxy)</span>
+          </button>
+        )}
 
         <button
           onClick={() => {
             onOpenBackupModal();
             if (onCloseMobileDrawer) onCloseMobileDrawer();
           }}
-          className="w-full min-h-[40px] flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+          className="w-full min-h-[38px] flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
         >
           <DownloadCloud className="w-4 h-4 text-slate-400 dark:text-slate-500" />
           <span>备份与还原 (Backup)</span>
@@ -162,7 +245,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             onOpenDocsModal();
             if (onCloseMobileDrawer) onCloseMobileDrawer();
           }}
-          className="w-full min-h-[40px] flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+          className="w-full min-h-[38px] flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
         >
           <BookOpen className="w-4 h-4 text-slate-400 dark:text-slate-500" />
           <span>手机与桌面端安装指南</span>

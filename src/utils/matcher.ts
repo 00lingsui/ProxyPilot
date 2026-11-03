@@ -9,6 +9,7 @@ import {
   SimulationResult 
 } from '../types/omega';
 import { isIpInCidr } from './cidr';
+import { isDomainSecurityBypassed } from './securityWhitelist';
 
 /**
  * Converts a wildcard string (e.g. *.google.com, *test*) to a RegExp
@@ -182,6 +183,24 @@ export function simulateRoute(
   const activeProfile = profiles.find(p => p.id === activeProfileId) || profiles[0];
   trace.push(`[2] 当前生效情景模式: "${activeProfile.name}" (${activeProfile.profileType})`);
 
+  // 0. Absolute Privacy & Security Direct Whitelist Check
+  const securityCheck = isDomainSecurityBypassed(host);
+  if (securityCheck.bypassed) {
+    trace.push(`[安全白名单拦截] ${securityCheck.matchedReason} -> 绝对直连 (Never Proxy)`);
+    const directProf = profiles.find(p => p.id === 'direct') || profiles[0];
+    return {
+      url: normalizedUrl,
+      parsedUrl: { protocol, hostname: host, port, pathname },
+      activeProfile,
+      effectiveProfile: directProf,
+      resolutionTrace: trace,
+      pacStatement: 'DIRECT',
+      finalProxySummary: `绝对直连 (${securityCheck.matchedReason})`,
+      isDirect: true,
+      latencyMs: Math.floor(Math.random() * 12 + 4),
+    };
+  }
+
   // Resolution helper
   function resolveProfile(currentProfile: Profile, depth = 0): {
     effective: Profile;
@@ -259,6 +278,21 @@ export function simulateRoute(
           const cleanScheme = rule.pattern.replace(/:$/, '').trim().toLowerCase();
           const targetScheme = protocol.replace(/:$/, '').trim().toLowerCase();
           isMatch = cleanScheme === targetScheme;
+        } else if (rule.conditionType === 'ResourceTypeCondition') {
+          const cleanPat = rule.pattern.toLowerCase();
+          if (cleanPat.includes('image')) {
+            isMatch = /\.(png|jpe?g|gif|webp|svg|ico)(\?.*)?$/i.test(normalizedUrl);
+          } else if (cleanPat.includes('media') || cleanPat.includes('video')) {
+            isMatch = /\.(mp4|webm|m3u8|ts|mp3|ogg|flv|wav)(\?.*)?$/i.test(normalizedUrl);
+          } else if (cleanPat.includes('script') || cleanPat.includes('js')) {
+            isMatch = /\.js(\?.*)?$/i.test(normalizedUrl);
+          } else if (cleanPat.includes('style') || cleanPat.includes('css')) {
+            isMatch = /\.css(\?.*)?$/i.test(normalizedUrl);
+          } else if (cleanPat.includes('ws') || cleanPat.includes('websocket')) {
+            isMatch = /^wss?:/i.test(normalizedUrl);
+          } else {
+            isMatch = matchWildcard(rule.pattern, normalizedUrl);
+          }
         }
 
         if (isMatch) {
@@ -269,6 +303,31 @@ export function simulateRoute(
               ...resolveProfile(targetProf, depth + 1),
               matchedRule: rule,
             };
+          }
+        }
+      }
+
+      // Check Multi-Rule Lists (Multiple subscriptions)
+      if (switcher.ruleLists && Array.isArray(switcher.ruleLists)) {
+        for (const rList of switcher.ruleLists) {
+          if (!rList.enabled || !rList.rulesText) continue;
+          trace.push(`[多规则订阅] 评估订阅源 "${rList.name}" (${rList.format})...`);
+          const matchRes = matchAutoProxyRule(rList.rulesText, host, normalizedUrl);
+          if (matchRes.matched) {
+            if (matchRes.isWhitelist) {
+              trace.push(`[订阅白名单] 匹配白名单项 "${matchRes.matchedLine}" -> 路由至直连模式`);
+              const defProf = profiles.find(p => p.id === 'direct');
+              if (defProf) return resolveProfile(defProf, depth + 1);
+            } else {
+              trace.push(`[订阅黑名单] 匹配规则项 "${matchRes.matchedLine}" -> 路由至订阅指定代理`);
+              const targetP = profiles.find(p => p.id === rList.profileId);
+              if (targetP) {
+                return {
+                  ...resolveProfile(targetP, depth + 1),
+                  matchedRuleList: true,
+                };
+              }
+            }
           }
         }
       }

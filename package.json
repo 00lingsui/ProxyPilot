@@ -1,11 +1,12 @@
 {
   "name": "proxypilot",
   "private": true,
-  "version": "1.0.4",
+  "version": "1.0.6",
   "type": "module",
   "scripts": {
     "dev": "vite --port=3000 --host=0.0.0.0",
-    "build": "vite build",
+    "build": "vite build && tsx scripts/sync-extension-dist.ts && tsx scripts/build-release-assets.ts",
+    "build:release": "tsx scripts/build-release-assets.ts",
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit"

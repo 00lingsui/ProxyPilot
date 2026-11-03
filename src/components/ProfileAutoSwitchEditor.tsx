@@ -9,9 +9,10 @@ import {
   Sparkles, 
   Layers,
   FileText,
-  HelpCircle
+  HelpCircle,
+  Zap
 } from 'lucide-react';
-import { SwitchProfile, Profile, ConditionType, SwitchRule } from '../types/omega';
+import { SwitchProfile, Profile, ConditionType, SwitchRule, OnlineRuleList } from '../types/omega';
 import { syncRuleList } from '../utils/ruleListSync';
 
 interface ProfileAutoSwitchEditorProps {
@@ -19,6 +20,8 @@ interface ProfileAutoSwitchEditorProps {
   allProfiles: Profile[];
   onChange: (updated: SwitchProfile) => void;
   onDeleteProfile: (id: string) => void;
+  isActive?: boolean;
+  onSetActive?: () => void;
 }
 
 export const ProfileAutoSwitchEditor: React.FC<ProfileAutoSwitchEditorProps> = ({
@@ -26,9 +29,60 @@ export const ProfileAutoSwitchEditor: React.FC<ProfileAutoSwitchEditorProps> = (
   allProfiles,
   onChange,
   onDeleteProfile,
+  isActive = false,
+  onSetActive,
 }) => {
   const [showRuleListEditor, setShowRuleListEditor] = useState(false);
   const [updatingList, setUpdatingList] = useState(false);
+  const [autoLearnEnabled, setAutoLearnEnabled] = useState(true);
+  const [autoApplyRule, setAutoApplyRule] = useState(true);
+
+  const handleAddRuleList = () => {
+    const defaultProxyId = allProfiles.find(p => p.profileType === 'FixedProfile')?.id || 'proxy_clash';
+    const newList: OnlineRuleList = {
+      id: 'sub_' + Date.now(),
+      name: '新规则订阅 ' + ((profile.ruleLists?.length || 0) + 1),
+      enabled: true,
+      url: 'https://raw.githubusercontent.com/gfwlist/gfwlist/master/gfwlist.txt',
+      format: 'AutoProxy',
+      profileId: defaultProxyId,
+      rulesText: '',
+      lastUpdated: '未同步',
+    };
+    onChange({
+      ...profile,
+      ruleLists: [...(profile.ruleLists || []), newList],
+    });
+  };
+
+  const handleUpdateRuleListItem = (idx: number, updated: Partial<OnlineRuleList>) => {
+    const list = [...(profile.ruleLists || [])];
+    list[idx] = { ...list[idx], ...updated };
+    onChange({ ...profile, ruleLists: list });
+  };
+
+  const handleDeleteRuleListItem = (idx: number) => {
+    const list = [...(profile.ruleLists || [])];
+    list.splice(idx, 1);
+    onChange({ ...profile, ruleLists: list });
+  };
+
+  const handleSyncSingleRuleList = async (idx: number) => {
+    const list = [...(profile.ruleLists || [])];
+    const target = list[idx];
+    if (!target) return;
+    try {
+      const res = await syncRuleList(target.url);
+      target.rulesText = res.text;
+      target.lastUpdated = res.lastUpdated;
+      onChange({ ...profile, ruleLists: list });
+      setSyncFeedback(`✅ 成功同步订阅 "${target.name}" (${res.ruleCount} 条规则)`);
+      setTimeout(() => setSyncFeedback(null), 4000);
+    } catch (e: any) {
+      setSyncFeedback(`❌ 订阅同步失败: ${e.message || '网络连接超时'}`);
+      setTimeout(() => setSyncFeedback(null), 4000);
+    }
+  };
 
   const handleAddRule = () => {
     const newRule: SwitchRule = {
@@ -134,6 +188,53 @@ export const ProfileAutoSwitchEditor: React.FC<ProfileAutoSwitchEditorProps> = (
 
   return (
     <div className="space-y-6">
+      {/* Proxy Takeover Status Card */}
+      {isActive ? (
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-800 text-emerald-900 dark:text-emerald-100 shadow-2xs">
+          <div className="flex items-center gap-2.5">
+            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+            <div>
+              <div className="font-bold text-xs flex items-center gap-1.5">
+                <span>✅ 当前浏览器正由此自动切换模式接管运行</span>
+                <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-emerald-200 dark:bg-emerald-800 text-emerald-900 dark:text-emerald-200 font-semibold">
+                  ACTIVE
+                </span>
+              </div>
+              <p className="text-[11px] text-emerald-700 dark:text-emerald-300 mt-0.5">
+                智能分流 PAC 引擎正在接管 Chrome 网络请求 | {profile.rules.length} 条已启用规则实时匹配
+              </p>
+            </div>
+          </div>
+          <span className="self-end sm:self-center text-[11px] font-medium text-emerald-700 dark:text-emerald-300">
+            PAC 智能分流中
+          </span>
+        </div>
+      ) : (
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-xl bg-blue-50/70 dark:bg-slate-800/80 border border-blue-200 dark:border-slate-700 shadow-2xs">
+          <div className="flex items-center gap-2.5">
+            <span className="w-2.5 h-2.5 rounded-full bg-slate-400 shrink-0" />
+            <div>
+              <div className="font-bold text-xs text-slate-800 dark:text-slate-200">
+                ○ 当前未接管浏览器代理
+              </div>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                自动切换规则已就绪。点击右侧按钮可立即激活并接管 Chrome 底层代理。
+              </p>
+            </div>
+          </div>
+          {onSetActive && (
+            <button
+              onClick={onSetActive}
+              className="self-end sm:self-center flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow-xs hover:shadow-sm transition-all transform active:scale-95 shrink-0"
+              title="立即将浏览器代理切换至此自动切换模式"
+            >
+              <Zap className="w-3.5 h-3.5" />
+              <span>⚡ 设为当前代理并接管浏览器</span>
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Header Info */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-200 dark:border-slate-800">
         <div>
@@ -240,6 +341,7 @@ export const ProfileAutoSwitchEditor: React.FC<ProfileAutoSwitchEditorProps> = (
                         <option value="IpCidrCondition">CIDR 网段 (192.168.1.0/24)</option>
                         <option value="PortCondition">端口匹配 (:8443 / :22)</option>
                         <option value="SchemeCondition">协议/类型 (https: / wss:)</option>
+                        <option value="ResourceTypeCondition">资源类型 (Image / Media / Script / WS)</option>
                       </select>
                     </td>
 
@@ -490,6 +592,153 @@ export const ProfileAutoSwitchEditor: React.FC<ProfileAutoSwitchEditorProps> = (
                 />
               </div>
             )}
+          </div>
+        )}
+      </div>
+
+      {/* Multi-Rule Lists (Multiple Subscriptions) */}
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Layers className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+            <h3 className="text-sm font-semibold text-slate-900 dark:text-white">
+              多规则库订阅 (Multiple Online Rule Lists)
+            </h3>
+            <span className="text-[11px] text-slate-500">
+              ({profile.ruleLists?.length || 0} 个自定义规则库)
+            </span>
+          </div>
+
+          <button
+            type="button"
+            onClick={handleAddRuleList}
+            className="flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/50 rounded transition-colors"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span>添加规则订阅</span>
+          </button>
+        </div>
+
+        {profile.ruleLists && profile.ruleLists.length > 0 && (
+          <div className="space-y-2">
+            {profile.ruleLists.map((rList, rIdx) => (
+              <div key={rList.id} className="p-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
+                <div className="flex items-center gap-3 flex-1 min-w-0">
+                  <input
+                    type="checkbox"
+                    checked={rList.enabled}
+                    onChange={(e) => handleUpdateRuleListItem(rIdx, { enabled: e.target.checked })}
+                    className="rounded text-blue-600"
+                  />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={rList.name}
+                        onChange={(e) => handleUpdateRuleListItem(rIdx, { name: e.target.value })}
+                        className="text-xs font-bold text-slate-900 dark:text-white bg-transparent border-b border-transparent hover:border-slate-300 dark:hover:border-slate-600 focus:outline-hidden"
+                      />
+                      <span className="text-[10px] bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 px-1.5 py-0.5 rounded">
+                        {rList.format}
+                      </span>
+                    </div>
+                    <input
+                      type="text"
+                      value={rList.url}
+                      onChange={(e) => handleUpdateRuleListItem(rIdx, { url: e.target.value })}
+                      className="text-xs font-mono text-slate-500 dark:text-slate-400 w-full truncate bg-transparent border-b border-transparent hover:border-slate-300 dark:hover:border-slate-600 focus:outline-hidden mt-0.5"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0">
+                  <select
+                    value={rList.profileId}
+                    onChange={(e) => handleUpdateRuleListItem(rIdx, { profileId: e.target.value })}
+                    className="text-xs bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded px-2 py-1 text-slate-800 dark:text-slate-200"
+                  >
+                    {allProfiles.map(p => (
+                      <option key={p.id} value={p.id}>{p.name}</option>
+                    ))}
+                  </select>
+
+                  <button
+                    type="button"
+                    onClick={() => handleSyncSingleRuleList(rIdx)}
+                    className="flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/40 px-2 py-1 rounded"
+                    title="立即同步此规则库"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">同步</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteRuleListItem(rIdx)}
+                    className="p-1 text-slate-400 hover:text-red-500 transition-colors"
+                    title="删除订阅"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Auto-Learn / Smart Routing Mode */}
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Sparkles className="w-4 h-4 text-amber-500" />
+            <h3 className="text-sm font-semibold text-slate-900 dark:text-white">
+              智能分流与“自动学习”模式 (Auto-Learn / Smart Routing)
+            </h3>
+            <span className="text-[10px] bg-amber-100 dark:bg-amber-900/60 text-amber-800 dark:text-amber-300 font-semibold px-2 py-0.5 rounded-full">
+              无感自愈
+            </span>
+          </div>
+
+          <label className="flex items-center gap-2 cursor-pointer text-xs font-medium text-slate-700 dark:text-slate-300">
+            <input
+              type="checkbox"
+              checked={autoLearnEnabled}
+              onChange={(e) => setAutoLearnEnabled(e.target.checked)}
+              className="rounded text-amber-600 focus:ring-0"
+            />
+            <span>开启智能自动学习</span>
+          </label>
+        </div>
+
+        {autoLearnEnabled && (
+          <div className="bg-white dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-lg p-4 space-y-3 shadow-2xs">
+            <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+              当您在直连或系统代理模式下，访问某个网页遇到连接超时、连接被重置 (ERR_CONNECTION_RESET) 或 504 错误时，ProxyPilot 会自动检测并将该域名智能纳入自动切换代理规则中，实现真正的无感智能路由。
+            </p>
+
+            <div className="flex flex-wrap items-center gap-4 text-xs pt-1 border-t border-slate-100 dark:border-slate-700">
+              <label className="flex items-center gap-2 text-slate-700 dark:text-slate-300 cursor-pointer">
+                <input
+                  type="radio"
+                  name="autoLearnAction"
+                  checked={autoApplyRule}
+                  onChange={() => setAutoApplyRule(true)}
+                  className="text-amber-600"
+                />
+                <span>静默无感自动生效（推荐）</span>
+              </label>
+              <label className="flex items-center gap-2 text-slate-700 dark:text-slate-300 cursor-pointer">
+                <input
+                  type="radio"
+                  name="autoLearnAction"
+                  checked={!autoApplyRule}
+                  onChange={() => setAutoApplyRule(false)}
+                  className="text-amber-600"
+                />
+                <span>在弹窗与通知中提示我确认</span>
+              </label>
+            </div>
           </div>
         )}
       </div>

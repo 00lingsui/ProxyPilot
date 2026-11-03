@@ -37,7 +37,8 @@ export type ConditionType =
   | 'BypassCondition'
   | 'IpCidrCondition'
   | 'PortCondition'
-  | 'SchemeCondition';
+  | 'SchemeCondition'
+  | 'ResourceTypeCondition';
 
 export interface ProxyAuth {
   username?: string;
@@ -52,6 +53,17 @@ export interface SwitchRule {
   profileId: string;
   enabled: boolean;
   note?: string;
+}
+
+export interface OnlineRuleList {
+  id: string;
+  name: string;
+  enabled: boolean;
+  url: string;
+  format: 'AutoProxy' | 'Switchy' | 'Clash' | 'Surge';
+  profileId: string;
+  rulesText?: string;
+  lastUpdated?: string;
 }
 
 export interface RuleListConfig {
@@ -102,6 +114,7 @@ export interface SwitchProfile extends BaseProfile {
   rules: SwitchRule[];
   defaultProfileId: string;
   ruleListConfig?: RuleListConfig;
+  ruleLists?: OnlineRuleList[];
 }
 
 export interface VirtualProfile extends BaseProfile {
@@ -191,3 +204,44 @@ export interface TabOverride {
   expireAt?: number;
   enabled: boolean;
 }
+
+export interface WorkspacePreset {
+  id: string;
+  name: string;
+  description: string;
+  icon?: string;
+  defaultPort: number;
+  activeProfileId?: string;
+}
+
+export interface AutoLearnTrigger {
+  domain: string;
+  reason: string;
+  timestamp: number;
+  statusCode?: number | string;
+}
+
+export interface AutoLearnConfig {
+  enabled: boolean;
+  autoApply: boolean;
+  targetProfileId: string;
+  recentTriggers: AutoLearnTrigger[];
+}
+
+export interface SecurityBypassConfig {
+  enabled: boolean;
+  bypassGovCn: boolean;
+  bypassEduCn: boolean;
+  bypassBanking: boolean;
+  bypassLocalLan: boolean;
+  customDomains: string[];
+}
+
+export interface ProxyHealthStatus {
+  profileId: string;
+  status: 'online' | 'warning' | 'offline' | 'checking';
+  latencyMs?: number;
+  lastTested?: number;
+  error?: string;
+}
+

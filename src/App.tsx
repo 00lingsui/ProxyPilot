@@ -10,12 +10,15 @@ import {
   Layers, 
   ShieldCheck, 
   Radio, 
-  AlertCircle
+  AlertCircle,
+  Zap,
+  CheckCircle2
 } from 'lucide-react';
 import { Profile } from './types/omega';
 import { DEFAULT_PROFILES } from './utils/defaultData';
 import { Header } from './components/Header';
 import { Sidebar } from './components/Sidebar';
+import { ProxyTakeoverBanner } from './components/ProxyTakeoverBanner';
 import { ProfileProxyEditor } from './components/ProfileProxyEditor';
 import { ProfileAutoSwitchEditor } from './components/ProfileAutoSwitchEditor';
 import { ProfilePacEditor } from './components/ProfilePacEditor';
@@ -29,6 +32,13 @@ import { ExtensionPackagerModal } from './components/ExtensionPackagerModal';
 import { BackupModal } from './components/BackupModal';
 import { NewProfileModal } from './components/NewProfileModal';
 import { DocsModal } from './components/DocsModal';
+import { WorkspaceModal } from './components/WorkspaceModal';
+import { SecurityWhitelistModal } from './components/SecurityWhitelistModal';
+import { DEFAULT_SECURITY_BYPASS } from './utils/securityWhitelist';
+import { testProxyLatency } from './utils/healthCheck';
+import { registerConsoleApi } from './utils/devConsoleApi';
+import { applyWorkspacePort } from './utils/workspacePresets';
+import { FixedProfile, ProxyHealthStatus, SecurityBypassConfig } from './types/omega';
 
 const STORAGE_KEY = 'proxypilot_profiles_v2';
 const ACTIVE_KEY = 'proxypilot_active_id_v2';
@@ -80,13 +90,51 @@ export default function App() {
   const [isNewProfileOpen, setIsNewProfileOpen] = useState(false);
   const [isDocsOpen, setIsDocsOpen] = useState(false);
 
+  const [isWorkspaceOpen, setIsWorkspaceOpen] = useState(false);
+  const [isSecurityOpen, setIsSecurityOpen] = useState(false);
+  const [securityConfig, setSecurityConfig] = useState<SecurityBypassConfig>(() => {
+    try {
+      const s = localStorage.getItem('proxypilot_sec_bypass');
+      if (s) return JSON.parse(s);
+    } catch {}
+    return DEFAULT_SECURITY_BYPASS;
+  });
+  const [healthStatus, setHealthStatus] = useState<Record<string, ProxyHealthStatus>>({});
+  const [isTestingPing, setIsTestingPing] = useState(false);
+
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  // Sync theme with documentElement
+  // On mount: sync with chrome.storage.local if available (extension mode)
+  useEffect(() => {
+    try {
+      const chromeObj = (window as any).chrome;
+      if (chromeObj?.storage?.local) {
+        chromeObj.storage.local.get(['profiles', 'activeProfileId', 'theme'], (res: any) => {
+          if (res?.profiles && Array.isArray(res.profiles) && res.profiles.length > 0) {
+            setProfiles(res.profiles);
+          }
+          if (res?.activeProfileId) {
+            setActiveProfileId(res.activeProfileId);
+          }
+          if (res?.theme && (res.theme === 'dark' || res.theme === 'light')) {
+            setTheme(res.theme);
+          }
+        });
+      }
+    } catch (e) {
+      console.warn('[ProxyPilot] Failed loading from chrome.storage.local:', e);
+    }
+  }, []);
+
+  // Sync theme with documentElement & storage
   useEffect(() => {
     try {
       localStorage.setItem(THEME_KEY, theme);
+      const chromeObj = (window as any).chrome;
+      if (chromeObj?.storage?.local) {
+        chromeObj.storage.local.set({ theme });
+      }
     } catch {}
     if (theme === 'dark') {
       document.documentElement.classList.add('dark');
@@ -95,16 +143,28 @@ export default function App() {
     }
   }, [theme]);
 
-  // Sync with localStorage
+  // Sync with localStorage & chrome.storage.local
   useEffect(() => {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(profiles));
+      const chromeObj = (window as any).chrome;
+      if (chromeObj?.storage?.local) {
+        chromeObj.storage.local.set({ profiles });
+      }
     } catch {}
   }, [profiles]);
 
   useEffect(() => {
     try {
       localStorage.setItem(ACTIVE_KEY, activeProfileId);
+      const chromeObj = (window as any).chrome;
+      if (chromeObj?.storage?.local) {
+        chromeObj.storage.local.set({ activeProfileId });
+        chromeObj.runtime?.sendMessage?.({
+          type: 'SWITCH_PROFILE',
+          profileId: activeProfileId
+        });
+      }
     } catch {}
   }, [activeProfileId]);
 
@@ -188,6 +248,43 @@ export default function App() {
     showToast(`已添加分流规则: ${pattern}`);
   };
 
+  const handlePingAllProxies = async () => {
+    setIsTestingPing(true);
+    const fixedProfs = profiles.filter(p => p.profileType === 'FixedProfile') as FixedProfile[];
+    const results: Record<string, ProxyHealthStatus> = { ...healthStatus };
+    for (const fp of fixedProfs) {
+      results[fp.id] = { profileId: fp.id, status: 'checking' };
+    }
+    setHealthStatus({ ...results });
+
+    for (const fp of fixedProfs) {
+      const res = await testProxyLatency(fp);
+      results[fp.id] = res;
+      setHealthStatus({ ...results });
+    }
+    setIsTestingPing(false);
+    showToast('已完成全部代理节点握手测速');
+  };
+
+  useEffect(() => {
+    registerConsoleApi(profiles, activeProfileId, {
+      setActiveProfileId: (id) => {
+        setActiveProfileId(id);
+        showToast(`已切换生效情景至: ${id}`);
+      },
+      onAddRule: (pattern, profileId) => {
+        handleAddRuleToAutoSwitchFromPopup(pattern, profileId);
+        showToast(`已在自动切换添加规则: ${pattern}`);
+      },
+      onSetPort: (port) => {
+        const updated = applyWorkspacePort(profiles, port);
+        setProfiles(updated);
+        showToast(`已批量更新端口至: ${port}`);
+      },
+      onPingAll: handlePingAllProxies,
+    });
+  }, [profiles, activeProfileId]);
+
   const selectedProfile = profiles.find(p => p.id === selectedProfileId) || profiles[0];
 
   return (
@@ -212,6 +309,15 @@ export default function App() {
         onToggleMobileDrawer={() => setIsMobileDrawerOpen(prev => !prev)}
       />
 
+      {/* Real-time Proxy Takeover Environment & Diagnostic Bar */}
+      <ProxyTakeoverBanner
+        activeProfile={profiles.find(p => p.id === activeProfileId) || profiles[0]}
+        profiles={profiles}
+        onOpenPackager={() => setIsPackagerOpen(true)}
+        onOpenDocs={() => setIsDocsOpen(true)}
+        onSelectTab={setCurrentTab}
+      />
+
       {/* Main Workspace Frame */}
       <div className="flex-1 flex overflow-hidden relative">
         {/* Left Sidebar (Only in profiles tab) */}
@@ -223,11 +329,16 @@ export default function App() {
             activeProfileId={activeProfileId}
             onSetActiveProfile={(id) => {
               setActiveProfileId(id);
-              showToast(`当前生效情景已切换至: ${profiles.find(p => p.id === id)?.name}`);
+              showToast(`🚀 已将「${profiles.find(p => p.id === id)?.name}」设为当前生效代理并接管浏览器！`);
             }}
             onOpenNewProfileModal={() => setIsNewProfileOpen(true)}
             onOpenBackupModal={() => setIsBackupOpen(true)}
             onOpenDocsModal={() => setIsDocsOpen(true)}
+            onOpenWorkspaces={() => setIsWorkspaceOpen(true)}
+            onOpenSecurityWhitelist={() => setIsSecurityOpen(true)}
+            onPingAll={handlePingAllProxies}
+            healthStatus={healthStatus}
+            isTestingPing={isTestingPing}
             isMobileDrawerOpen={isMobileDrawerOpen}
             onCloseMobileDrawer={() => setIsMobileDrawerOpen(false)}
           />
@@ -244,6 +355,11 @@ export default function App() {
                     profile={selectedProfile}
                     onChange={handleUpdateProfile}
                     onDeleteProfile={handleDeleteProfile}
+                    isActive={selectedProfile.id === activeProfileId}
+                    onSetActive={() => {
+                      setActiveProfileId(selectedProfile.id);
+                      showToast(`🚀 已将「${selectedProfile.name}」设为当前生效代理并接管浏览器！`);
+                    }}
                   />
                 )}
 
@@ -253,6 +369,11 @@ export default function App() {
                     allProfiles={profiles}
                     onChange={handleUpdateProfile}
                     onDeleteProfile={handleDeleteProfile}
+                    isActive={selectedProfile.id === activeProfileId}
+                    onSetActive={() => {
+                      setActiveProfileId(selectedProfile.id);
+                      showToast(`🚀 已将「${selectedProfile.name}」设为当前生效代理并接管浏览器！`);
+                    }}
                   />
                 )}
 
@@ -261,6 +382,11 @@ export default function App() {
                     profile={selectedProfile}
                     onChange={handleUpdateProfile}
                     onDeleteProfile={handleDeleteProfile}
+                    isActive={selectedProfile.id === activeProfileId}
+                    onSetActive={() => {
+                      setActiveProfileId(selectedProfile.id);
+                      showToast(`🚀 已将「${selectedProfile.name}」设为当前生效代理并接管浏览器！`);
+                    }}
                   />
                 )}
 
@@ -276,6 +402,48 @@ export default function App() {
                 {/* Built-in Direct Profile View */}
                 {selectedProfile.profileType === 'DirectProfile' && (
                   <div className="space-y-4">
+                    {/* Takeover status */}
+                    {selectedProfile.id === activeProfileId ? (
+                      <div className="flex items-center justify-between p-3.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-800 text-emerald-900 dark:text-emerald-100">
+                        <div className="flex items-center gap-2.5">
+                          <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+                          <div>
+                            <div className="font-bold text-xs flex items-center gap-1.5">
+                              <span>✅ 当前浏览器正处于直接连接 (不走代理)</span>
+                              <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-emerald-200 dark:bg-emerald-800 text-emerald-900 dark:text-emerald-200 font-semibold">
+                                DIRECT
+                              </span>
+                            </div>
+                            <p className="text-[11px] text-emerald-700 dark:text-emerald-300 mt-0.5">
+                              所有网络请求直连目标服务器，无代理中转
+                            </p>
+                          </div>
+                        </div>
+                        <span className="text-[11px] font-semibold text-emerald-700 dark:text-emerald-300">
+                          直连生效中
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-between p-3.5 rounded-xl bg-blue-50/70 dark:bg-slate-800/80 border border-blue-200 dark:border-slate-700">
+                        <div className="flex items-center gap-2.5">
+                          <span className="w-2.5 h-2.5 rounded-full bg-slate-400 shrink-0" />
+                          <div className="text-xs text-slate-700 dark:text-slate-300">
+                            当前未启用直接连接 (目前生效: <strong>{profiles.find(p => p.id === activeProfileId)?.name}</strong>)
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => {
+                            setActiveProfileId('direct');
+                            showToast('🚀 已将浏览器设为直接连接模式！');
+                          }}
+                          className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow-xs"
+                        >
+                          <Zap className="w-3.5 h-3.5" />
+                          <span>⚡ 设为当前模式 (直连)</span>
+                        </button>
+                      </div>
+                    )}
+
                     <div className="flex items-center gap-3 pb-4 border-b border-slate-200 dark:border-slate-800">
                       <span className="w-4 h-4 rounded-sm bg-slate-500 shrink-0" />
                       <h2 className="text-lg font-bold text-slate-900 dark:text-white">
@@ -299,6 +467,48 @@ export default function App() {
                 {/* Built-in System Profile View */}
                 {selectedProfile.profileType === 'SystemProfile' && (
                   <div className="space-y-4">
+                    {/* Takeover status */}
+                    {selectedProfile.id === activeProfileId ? (
+                      <div className="flex items-center justify-between p-3.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-800 text-emerald-900 dark:text-emerald-100">
+                        <div className="flex items-center gap-2.5">
+                          <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+                          <div>
+                            <div className="font-bold text-xs flex items-center gap-1.5">
+                              <span>✅ 当前浏览器正继承操作系统代理 (系统代理)</span>
+                              <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-emerald-200 dark:bg-emerald-800 text-emerald-900 dark:text-emerald-200 font-semibold">
+                                SYSTEM
+                              </span>
+                            </div>
+                            <p className="text-[11px] text-emerald-700 dark:text-emerald-300 mt-0.5">
+                              遵循 Windows/macOS/Linux 操作系统的网络代理设置
+                            </p>
+                          </div>
+                        </div>
+                        <span className="text-[11px] font-semibold text-emerald-700 dark:text-emerald-300">
+                          系统代理生效中
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-between p-3.5 rounded-xl bg-blue-50/70 dark:bg-slate-800/80 border border-blue-200 dark:border-slate-700">
+                        <div className="flex items-center gap-2.5">
+                          <span className="w-2.5 h-2.5 rounded-full bg-slate-400 shrink-0" />
+                          <div className="text-xs text-slate-700 dark:text-slate-300">
+                            当前未启用系统代理 (目前生效: <strong>{profiles.find(p => p.id === activeProfileId)?.name}</strong>)
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => {
+                            setActiveProfileId('system');
+                            showToast('🚀 已将浏览器设为使用系统代理模式！');
+                          }}
+                          className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow-xs"
+                        >
+                          <Zap className="w-3.5 h-3.5" />
+                          <span>⚡ 设为当前模式 (系统)</span>
+                        </button>
+                      </div>
+                    )}
+
                     <div className="flex items-center gap-3 pb-4 border-b border-slate-200 dark:border-slate-800">
                       <span className="w-4 h-4 rounded-sm bg-sky-600 shrink-0" />
                       <h2 className="text-lg font-bold text-slate-900 dark:text-white">
@@ -476,6 +686,29 @@ export default function App() {
       <DocsModal
         isOpen={isDocsOpen}
         onClose={() => setIsDocsOpen(false)}
+      />
+
+      {/* Workspace Preset Modal */}
+      <WorkspaceModal
+        isOpen={isWorkspaceOpen}
+        onClose={() => setIsWorkspaceOpen(false)}
+        profiles={profiles}
+        onApplyProfiles={(updated) => {
+          setProfiles(updated);
+          setHasUnsavedChanges(true);
+        }}
+      />
+
+      {/* Security Whitelist Modal */}
+      <SecurityWhitelistModal
+        isOpen={isSecurityOpen}
+        onClose={() => setIsSecurityOpen(false)}
+        config={securityConfig}
+        onSaveConfig={(updated) => {
+          setSecurityConfig(updated);
+          localStorage.setItem('proxypilot_sec_bypass', JSON.stringify(updated));
+          showToast('隐私安全白名单设置已生效并保存');
+        }}
       />
     </div>
   );
