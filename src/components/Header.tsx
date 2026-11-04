@@ -187,50 +187,116 @@ export const Header: React.FC<HeaderProps> = ({
             )}
           </button>
 
-          {/* Active Profile Dropdown */}
+          {/* Active Profile Dropdown & Mobile Action Sheet */}
           <div className="relative">
             <button
               onClick={() => setProfileDropdownOpen(!profileDropdownOpen)}
-              className="min-h-[36px] sm:min-h-[40px] flex items-center gap-1.5 sm:gap-2 px-2 sm:px-2.5 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 rounded-lg text-xs text-slate-800 dark:text-slate-200 transition-colors"
+              className="min-h-[38px] sm:min-h-[40px] flex items-center gap-1.5 sm:gap-2 px-2.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700/80 border border-slate-200 dark:border-slate-700 rounded-lg text-xs text-slate-800 dark:text-slate-200 transition-colors"
+              aria-label="选择当前生效代理情景"
             >
               <span 
-                className="w-2.5 h-2.5 rounded-full shrink-0" 
+                className="w-2.5 h-2.5 rounded-full shrink-0 shadow-2xs" 
                 style={{ backgroundColor: activeProfile.color || '#3b82f6' }}
               />
-              <span className="font-medium max-w-[80px] sm:max-w-[120px] truncate">{activeProfile.name}</span>
-              <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
+              <span className="font-semibold max-w-[70px] xs:max-w-[100px] sm:max-w-[120px] truncate">{activeProfile.name}</span>
+              <ChevronDown className="w-3.5 h-3.5 text-slate-400 shrink-0" />
             </button>
 
             {profileDropdownOpen && (
-              <div 
-                className="absolute right-0 mt-1 w-56 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-lg py-1 z-50 text-xs"
-                onMouseLeave={() => setProfileDropdownOpen(false)}
-              >
-                <div className="px-3 py-1 text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
-                  切换当前生效情景
+              <>
+                {/* Desktop dropdown */}
+                <div 
+                  className="hidden md:block absolute right-0 mt-1 w-56 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-lg py-1 z-50 text-xs"
+                  onMouseLeave={() => setProfileDropdownOpen(false)}
+                >
+                  <div className="px-3 py-1 text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
+                    切换当前生效情景
+                  </div>
+                  {profiles.map(p => (
+                    <button
+                      key={p.id}
+                      onClick={() => {
+                        setActiveProfileId(p.id);
+                        setProfileDropdownOpen(false);
+                      }}
+                      className={`w-full min-h-[40px] flex items-center justify-between px-3 py-2 text-left hover:bg-slate-50 dark:hover:bg-slate-700/60 transition-colors ${
+                        p.id === activeProfileId ? 'text-blue-600 dark:text-blue-400 font-semibold bg-blue-50/50 dark:bg-blue-900/30' : 'text-slate-700 dark:text-slate-300'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 truncate">
+                        <span 
+                          className="w-2.5 h-2.5 rounded-full shrink-0" 
+                          style={{ backgroundColor: p.color || '#3b82f6' }}
+                        />
+                        <span className="truncate">{p.name}</span>
+                      </div>
+                      {p.id === activeProfileId && <Check className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 shrink-0" />}
+                    </button>
+                  ))}
                 </div>
-                {profiles.map(p => (
-                  <button
-                    key={p.id}
-                    onClick={() => {
-                      setActiveProfileId(p.id);
-                      setProfileDropdownOpen(false);
-                    }}
-                    className={`w-full min-h-[40px] flex items-center justify-between px-3 py-2 text-left hover:bg-slate-50 dark:hover:bg-slate-700/60 transition-colors ${
-                      p.id === activeProfileId ? 'text-blue-600 dark:text-blue-400 font-semibold bg-blue-50/50 dark:bg-blue-900/30' : 'text-slate-700 dark:text-slate-300'
-                    }`}
+
+                {/* Mobile Bottom Sheet Action Modal */}
+                <div 
+                  className="md:hidden fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex flex-col justify-end animate-in fade-in duration-150"
+                  onClick={() => setProfileDropdownOpen(false)}
+                >
+                  <div 
+                    className="bg-white dark:bg-slate-900 rounded-t-2xl border-t border-slate-200 dark:border-slate-800 p-4 max-h-[75vh] flex flex-col space-y-3 shadow-2xl animate-in slide-in-from-bottom duration-200"
+                    onClick={(e) => e.stopPropagation()}
                   >
-                    <div className="flex items-center gap-2 truncate">
-                      <span 
-                        className="w-2.5 h-2.5 rounded-full shrink-0" 
-                        style={{ backgroundColor: p.color || '#3b82f6' }}
-                      />
-                      <span className="truncate">{p.name}</span>
+                    <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
+                      <div>
+                        <div className="font-bold text-sm text-slate-900 dark:text-white">切换生效情景模式</div>
+                        <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">点击直接切换全局或自动分流规则</div>
+                      </div>
+                      <button 
+                        onClick={() => setProfileDropdownOpen(false)}
+                        className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800"
+                      >
+                        <span className="text-base font-bold leading-none">✕</span>
+                      </button>
                     </div>
-                    {p.id === activeProfileId && <Check className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 shrink-0" />}
-                  </button>
-                ))}
-              </div>
+
+                    <div className="overflow-y-auto space-y-2 py-1 max-h-[50vh]">
+                      {profiles.map(p => {
+                        const isCurrent = p.id === activeProfileId;
+                        return (
+                          <button
+                            key={p.id}
+                            onClick={() => {
+                              setActiveProfileId(p.id);
+                              setProfileDropdownOpen(false);
+                            }}
+                            className={`w-full min-h-[50px] flex items-center justify-between px-3.5 py-2.5 rounded-xl border text-left transition-all ${
+                              isCurrent 
+                                ? 'bg-blue-50/80 dark:bg-blue-950/50 border-blue-500 text-blue-900 dark:text-blue-100 font-bold shadow-xs' 
+                                : 'bg-slate-50 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700/60 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+                            }`}
+                          >
+                            <div className="flex items-center gap-3 min-w-0">
+                              <span 
+                                className="w-3.5 h-3.5 rounded-full shrink-0 shadow-xs" 
+                                style={{ backgroundColor: p.color || '#3b82f6' }}
+                              />
+                              <div className="truncate">
+                                <div className="text-xs font-semibold truncate">{p.name}</div>
+                                <div className="text-[10px] text-slate-400 dark:text-slate-500 font-mono mt-0.5">
+                                  {p.profileType === 'FixedProfile' ? '固定端口 7897' : p.profileType === 'SwitchProfile' ? '智能自动分流' : p.profileType}
+                                </div>
+                              </div>
+                            </div>
+                            {isCurrent && (
+                              <span className="px-2 py-0.5 rounded-full bg-blue-600 text-white text-[10px] font-bold shrink-0">
+                                生效中
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              </>
             )}
           </div>
 
@@ -260,54 +326,69 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
       </header>
 
-      {/* Mobile Bottom Navigation Bar (Pattern 1 from Mobile Touch Guidelines) */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-slate-200 dark:border-slate-800 grid grid-cols-5 items-center h-16 pb-safe transition-colors select-none">
+      {/* Mobile Bottom Navigation Bar */}
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-slate-200/80 dark:border-slate-800/80 grid grid-cols-5 items-center h-16 pb-safe transition-colors select-none shadow-[0_-4px_20px_rgba(0,0,0,0.04)]">
         <button
           onClick={() => setCurrentTab('profiles')}
-          className={`min-h-[48px] flex flex-col items-center justify-center gap-0.5 transition-colors ${
-            currentTab === 'profiles' ? 'text-blue-600 dark:text-blue-400 font-semibold' : 'text-slate-500 dark:text-slate-400'
+          className={`relative min-h-[48px] flex flex-col items-center justify-center gap-1 transition-colors ${
+            currentTab === 'profiles' ? 'text-blue-600 dark:text-blue-400 font-bold' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800'
           }`}
         >
+          {currentTab === 'profiles' && (
+            <span className="absolute top-0 w-8 h-0.5 bg-blue-600 dark:bg-blue-400 rounded-full" />
+          )}
           <Layers className="w-4 h-4" />
           <span className="text-[10px] tracking-tight">情景配置</span>
         </button>
 
         <button
           onClick={() => setCurrentTab('inspector')}
-          className={`min-h-[48px] flex flex-col items-center justify-center gap-0.5 transition-colors ${
-            currentTab === 'inspector' ? 'text-blue-600 dark:text-blue-400 font-semibold' : 'text-slate-500 dark:text-slate-400'
+          className={`relative min-h-[48px] flex flex-col items-center justify-center gap-1 transition-colors ${
+            currentTab === 'inspector' ? 'text-blue-600 dark:text-blue-400 font-bold' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800'
           }`}
         >
+          {currentTab === 'inspector' && (
+            <span className="absolute top-0 w-8 h-0.5 bg-blue-600 dark:bg-blue-400 rounded-full" />
+          )}
           <Activity className="w-4 h-4 text-blue-500" />
           <span className="text-[10px] tracking-tight">抓包诊断</span>
         </button>
 
         <button
           onClick={() => setCurrentTab('simulator')}
-          className={`min-h-[48px] flex flex-col items-center justify-center gap-0.5 transition-colors ${
-            currentTab === 'simulator' ? 'text-blue-600 dark:text-blue-400 font-semibold' : 'text-slate-500 dark:text-slate-400'
+          className={`relative min-h-[48px] flex flex-col items-center justify-center gap-1 transition-colors ${
+            currentTab === 'simulator' ? 'text-blue-600 dark:text-blue-400 font-bold' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800'
           }`}
         >
+          {currentTab === 'simulator' && (
+            <span className="absolute top-0 w-8 h-0.5 bg-blue-600 dark:bg-blue-400 rounded-full" />
+          )}
           <PlayCircle className="w-4 h-4" />
           <span className="text-[10px] tracking-tight">路由模拟</span>
         </button>
 
         <button
           onClick={() => setCurrentTab('cloud')}
-          className={`min-h-[48px] flex flex-col items-center justify-center gap-0.5 transition-colors ${
-            currentTab === 'cloud' ? 'text-blue-600 dark:text-blue-400 font-semibold' : 'text-slate-500 dark:text-slate-400'
+          className={`relative min-h-[48px] flex flex-col items-center justify-center gap-1 transition-colors ${
+            currentTab === 'cloud' ? 'text-blue-600 dark:text-blue-400 font-bold' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800'
           }`}
         >
+          {currentTab === 'cloud' && (
+            <span className="absolute top-0 w-8 h-0.5 bg-blue-600 dark:bg-blue-400 rounded-full" />
+          )}
           <Cloud className="w-4 h-4" />
           <span className="text-[10px] tracking-tight">云同步</span>
         </button>
 
         <button
           onClick={() => setCurrentTab('backup')}
-          className={`min-h-[48px] flex flex-col items-center justify-center gap-0.5 transition-colors ${
-            currentTab === 'backup' ? 'text-blue-600 dark:text-blue-400 font-semibold' : 'text-slate-500 dark:text-slate-400'
+          className={`relative min-h-[48px] flex flex-col items-center justify-center gap-1 transition-colors ${
+            currentTab === 'backup' ? 'text-blue-600 dark:text-blue-400 font-bold' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800'
           }`}
         >
+          {currentTab === 'backup' && (
+            <span className="absolute top-0 w-8 h-0.5 bg-blue-600 dark:bg-blue-400 rounded-full" />
+          )}
           <Sparkles className="w-4 h-4" />
           <span className="text-[10px] tracking-tight">预设/导出</span>
         </button>

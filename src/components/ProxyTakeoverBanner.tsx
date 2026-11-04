@@ -175,37 +175,39 @@ export const ProxyTakeoverBanner: React.FC<ProxyTakeoverBannerProps> = ({
         </div>
 
         {/* Right action buttons */}
-        <div className="flex items-center gap-2 shrink-0 self-end lg:self-center">
-          <button
-            onClick={onOpenTakeoverGuidance || onOpenPackager}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-xs hover:shadow-sm transition-all transform active:scale-95"
-            title="一键导出为 Chrome / Edge / Kiwi 扩展"
-          >
-            <Download className="w-3.5 h-3.5" />
-            <span>如何真实接管浏览器？</span>
-          </button>
+        <div className="w-full lg:w-auto flex flex-wrap items-center justify-between sm:justify-start gap-2 pt-1 lg:pt-0 shrink-0">
+          <div className="flex flex-wrap items-center gap-2 flex-1 sm:flex-initial">
+            <button
+              onClick={onOpenTakeoverGuidance || onOpenPackager}
+              className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-xs hover:shadow-sm transition-all transform active:scale-95 text-center"
+              title="一键查看真实接管浏览器教程"
+            >
+              <Download className="w-3.5 h-3.5 shrink-0" />
+              <span>真实接管指南</span>
+            </button>
 
-          <button
-            onClick={onOpenDocs}
-            className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 rounded-lg transition-colors"
-            title="查看手机/电脑端 3 步安装指南"
-          >
-            <Smartphone className="w-3.5 h-3.5 text-slate-500" />
-            <span>3步安装指南</span>
-          </button>
+            <button
+              onClick={onOpenDocs}
+              className="flex items-center justify-center gap-1 px-2.5 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 rounded-lg transition-colors"
+              title="查看手机/电脑端安装指南"
+            >
+              <Smartphone className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+              <span>手机/PC指南</span>
+            </button>
 
-          <button
-            onClick={() => onSelectTab('simulator')}
-            className="hidden sm:flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/60 hover:bg-blue-100 border border-blue-200 dark:border-blue-800 rounded-lg transition-colors"
-            title="测试域名和分流规则"
-          >
-            <Globe className="w-3.5 h-3.5" />
-            <span>在线路由模拟</span>
-          </button>
+            <button
+              onClick={() => onSelectTab('simulator')}
+              className="hidden sm:flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/60 hover:bg-blue-100 border border-blue-200 dark:border-blue-800 rounded-lg transition-colors"
+              title="测试域名和分流规则"
+            >
+              <Globe className="w-3.5 h-3.5 shrink-0" />
+              <span>路由模拟</span>
+            </button>
+          </div>
 
           <button
             onClick={() => setIsDismissed(true)}
-            className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded transition-colors"
+            className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded transition-colors"
             title="收起横幅"
           >
             <X className="w-4 h-4" />

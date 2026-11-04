@@ -356,11 +356,52 @@ export default function App() {
         )}
 
         {/* Content Viewport */}
-        <main className="flex-1 overflow-y-auto bg-slate-50 dark:bg-slate-950/60 p-3 sm:p-6 pb-24 md:pb-6 transition-colors">
+        <main className="flex-1 overflow-y-auto bg-slate-50 dark:bg-slate-950/60 p-3 sm:p-6 pb-28 md:pb-6 transition-colors">
           <div className="max-w-5xl mx-auto">
+            {/* Mobile Quick Profile Ribbon */}
+            {currentTab === 'profiles' && (
+              <div className="md:hidden flex items-center gap-1.5 overflow-x-auto pb-2.5 mb-2.5 select-none scroll-smooth">
+                {profiles.map(p => {
+                  const isSelected = p.id === selectedProfileId;
+                  const isActive = p.id === activeProfileId;
+                  return (
+                    <button
+                      key={p.id}
+                      onClick={() => setSelectedProfileId(p.id)}
+                      className={`shrink-0 min-h-[34px] flex items-center gap-1.5 px-3 py-1 rounded-full text-xs transition-all border ${
+                        isSelected
+                          ? 'bg-blue-600 border-blue-600 text-white font-semibold shadow-xs'
+                          : 'bg-white dark:bg-slate-800/90 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 active:scale-95'
+                      }`}
+                    >
+                      <span 
+                        className={`w-2 h-2 rounded-full shrink-0 ${isSelected ? 'bg-white' : ''}`}
+                        style={{ backgroundColor: isSelected ? '#ffffff' : (p.color || '#3b82f6') }}
+                      />
+                      <span className="truncate max-w-[120px]">{p.name}</span>
+                      {isActive && (
+                        <span className={`text-[9px] px-1.5 py-0.2 rounded-full font-bold uppercase tracking-wider ${
+                          isSelected ? 'bg-white/20 text-white' : 'bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-400'
+                        }`}>
+                          生效
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+                <button
+                  onClick={() => setIsNewProfileOpen(true)}
+                  className="shrink-0 min-h-[34px] flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium bg-slate-100 dark:bg-slate-800 border border-dashed border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:text-blue-600 active:scale-95"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>新建</span>
+                </button>
+              </div>
+            )}
+
             {/* View: Profiles Settings */}
             {currentTab === 'profiles' && selectedProfile && (
-              <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-6 shadow-xs">
+              <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-3.5 sm:p-6 shadow-xs">
                 {selectedProfile.profileType === 'FixedProfile' && (
                   <ProfileProxyEditor
                     profile={selectedProfile}

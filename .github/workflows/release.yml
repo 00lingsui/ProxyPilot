@@ -1,26 +1,26 @@
-name: Build and Publish Release
+name: Auto Build and Publish Release
 
 on:
   push:
+    branches:
+      - main
     tags:
       - 'v*'
   workflow_dispatch:
     inputs:
       tag_name:
-        description: 'Release Tag (e.g. v1.0.6)'
-        required: true
-        default: 'v1.0.6'
+        description: 'Release Tag (default: package.json version)'
+        required: false
       release_name:
         description: 'Release Title'
-        required: true
-        default: 'ProxyPilot v1.0.6 - 现代化智能浏览器代理自动化套件'
+        required: false
 
 permissions:
   contents: write
 
 jobs:
   build-and-release:
-    name: Build & Release ProxyPilot
+    name: Build & Publish Release to GitHub
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
@@ -32,35 +32,48 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: 'npm'
 
       - name: Install Dependencies
-        run: npm install
+        run: npm install --legacy-peer-deps
 
-      - name: Build Web App & Extension Release Assets
+      - name: Build Web App & Extension Assets (.crx, .zip, .pac)
         run: npm run build
 
-      - name: Resolve Release Tag & Name
+      - name: Resolve Release Tag, Name & Notes
         id: release_vars
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          VERSION=$(node -p "require('./package.json').version")
+          
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ github.event.inputs.tag_name }}" ]; then
             TAG="${{ github.event.inputs.tag_name }}"
-            NAME="${{ github.event.inputs.release_name }}"
-          else
+            NAME="${{ github.event.inputs.release_name || format('ProxyPilot {0} - 现代化智能浏览器代理自动化套件', github.event.inputs.tag_name) }}"
+          elif [[ "${GITHUB_REF}" == refs/tags/* ]]; then
             TAG="${GITHUB_REF#refs/tags/}"
             NAME="ProxyPilot ${TAG} - 现代化智能浏览器代理自动化套件"
+          else
+            TAG="v${VERSION}"
+            NAME="ProxyPilot v${VERSION} - 现代化智能浏览器代理自动化套件"
           fi
+          
+          NOTES_FILE="RELEASE_NOTES_${TAG}.md"
+          if [ ! -f "$NOTES_FILE" ]; then
+            NOTES_FILE="RELEASE_NOTES_v1.0.6.md"
+          fi
+          
           echo "tag=${TAG}" >> $GITHUB_OUTPUT
           echo "name=${NAME}" >> $GITHUB_OUTPUT
+          echo "notes_file=${NOTES_FILE}" >> $GITHUB_OUTPUT
 
-      - name: Publish GitHub Release
+      - name: Publish or Update GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.release_vars.outputs.tag }}
           name: ${{ steps.release_vars.outputs.name }}
-          body_path: RELEASE_NOTES_v1.0.6.md
+          target_commitish: ${{ github.sha }}
+          body_path: ${{ steps.release_vars.outputs.notes_file }}
           files: |
-            dist-release/ProxyPilot-v1.0.6-chrome-extension.zip
+            dist-release/ProxyPilot-*.crx
+            dist-release/ProxyPilot-*.zip
             dist-release/proxy.pac
           draft: false
           prerelease: false

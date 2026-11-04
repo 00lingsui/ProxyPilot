@@ -148,23 +148,44 @@ export const TakeoverGuidanceModal: React.FC<TakeoverGuidanceModalProps> = ({
 
             <div className="bg-white dark:bg-slate-800/90 rounded-lg p-3 border border-slate-200 dark:border-slate-700 space-y-2 text-[11px]">
               <div className="font-semibold text-slate-800 dark:text-slate-200">
-                💻 电脑端 (Chrome / Edge / Brave / 360) 3 步加载：
+                💻 电脑端 (Chrome / Edge / Brave / 360) 两种安装方式：
               </div>
-              <ol className="list-decimal list-inside space-y-1 text-slate-600 dark:text-slate-400 pl-1">
-                <li>下载下方 <strong>ProxyPilot-v1.0.6-chrome-extension.zip</strong> 并解压至任意文件夹。</li>
-                <li>在浏览器地址栏打开 <code className="bg-slate-100 dark:bg-slate-700 px-1 py-0.5 rounded font-mono text-blue-600 dark:text-blue-400">chrome://extensions</code> 并开启右上角 <strong>「开发者模式」</strong>。</li>
-                <li>点击左上角 <strong>「加载已解压的扩展程序」</strong> 选择解压后的文件夹，立即真实生效！</li>
-              </ol>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-0.5">
+                <div className="p-2 rounded bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700/60 space-y-1">
+                  <div className="font-bold text-blue-600 dark:text-blue-400">方式一：.crx 单文件拖放安装</div>
+                  <ol className="list-decimal list-inside text-slate-600 dark:text-slate-400 space-y-0.5 pl-0.5">
+                    <li>打开 <code className="bg-slate-100 dark:bg-slate-700 px-1 py-0.5 rounded font-mono text-blue-600 dark:text-blue-400">chrome://extensions</code></li>
+                    <li>开启右上角 <strong>「开发者模式」</strong></li>
+                    <li>直接将下载的 <strong>.crx</strong> 文件拖入该页面即可！</li>
+                  </ol>
+                </div>
+                <div className="p-2 rounded bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700/60 space-y-1">
+                  <div className="font-bold text-indigo-600 dark:text-indigo-400">方式二：.zip 解压免签安装（最稳）</div>
+                  <ol className="list-decimal list-inside text-slate-600 dark:text-slate-400 space-y-0.5 pl-0.5">
+                    <li>下载 <strong>.zip</strong> 并解压到任意文件夹</li>
+                    <li>进入扩展页开启 <strong>「开发者模式」</strong></li>
+                    <li>点击 <strong>「加载已解压的扩展程序」</strong> 选中文件夹</li>
+                  </ol>
+                </div>
+              </div>
             </div>
 
-            <div className="flex items-center gap-2 pt-1">
+            <div className="flex flex-wrap items-center gap-2 pt-1">
+              <a
+                href="/ProxyPilot-v1.0.6.crx"
+                download="ProxyPilot-v1.0.6.crx"
+                className="flex-1 min-w-[160px] py-2 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs flex items-center justify-center gap-2 shadow-xs transition-colors cursor-pointer text-center"
+              >
+                <Download className="w-4 h-4" />
+                <span>下载 .crx 扩展包 (CRX3)</span>
+              </a>
               <a
                 href="/ProxyPilot-v1.0.6-chrome-extension.zip"
                 download="ProxyPilot-v1.0.6-chrome-extension.zip"
-                className="flex-1 py-2 px-3 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs flex items-center justify-center gap-2 shadow-xs transition-colors cursor-pointer text-center"
+                className="flex-1 min-w-[160px] py-2 px-3 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs flex items-center justify-center gap-2 shadow-xs transition-colors cursor-pointer text-center"
               >
                 <Download className="w-4 h-4" />
-                <span>立即下载 ProxyPilot v1.0.6 扩展包 (.zip)</span>
+                <span>下载 .zip 解压包 (通用)</span>
               </a>
               <button
                 type="button"

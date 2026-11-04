@@ -47,7 +47,8 @@
 
 | 文件名 | 类型 | 说明 |
 | :--- | :--- | :--- |
-| **`ProxyPilot-v1.0.6-chrome-extension.zip`** | Chrome 扩展包 | 包含完整 MV3 核心、后台 Service Worker、Popup 快捷菜单、Options 设置面板的免安装扩展压缩包（Chrome/Edge/Kiwi通用） |
+| **`ProxyPilot-v1.0.6.crx`** | Chrome 扩展安装包 (CRXv3) | 官方标准 CRX3 格式打包二进制文件，开启开发者模式后可直接拖入浏览器完成安装 |
+| **`ProxyPilot-v1.0.6-chrome-extension.zip`** | Chrome 扩展离线解压包 | 包含完整 MV3 核心、后台 Service Worker、Popup 菜单与设置面板（免签名、Kiwi 浏览器一键秒装） |
 | **`proxy.pac`** | Standalone PAC 脚本 | 纯 ASCII 格式，内置高频 GFWList 与自定义规则，可直接配置在系统网络或路由器 |
 | **`source-code.zip` / `source-code.tar.gz`** | 源码归档 | 完整应用工程源代码 |
 
@@ -56,12 +57,17 @@
 ## 💻 快速安装指南
 
 ### 1. 桌面浏览器 (Chrome / Edge / Brave / 360极速)
+
+**方式 A（.crx 拖放安装）**：
+1. 下载 **`ProxyPilot-v1.0.6.crx`** 文件。
+2. 打开浏览器扩展程序管理页面：`chrome://extensions`（Edge 访问 `edge://extensions`）。
+3. 开启页面右上角 **「开发者模式」** 开关。
+4. 将下载的 **`ProxyPilot-v1.0.6.crx`** 文件直接拖拽至扩展页面空白区域，点击确认添加即可。
+
+**方式 B（.zip 解压免签安装，最稳定推荐）**：
 1. 下载 **`ProxyPilot-v1.0.6-chrome-extension.zip`** 并解压至任意文件夹。
-2. 打开浏览器扩展程序管理页面：
-   - Chrome: `chrome://extensions`
-   - Edge: `edge://extensions`
-3. 打开页面右上角 **「开发者模式」** 开关。
-4. 点击 **「加载已解压的扩展程序」**，选择刚才解压的文件夹即可完成安装！
+2. 打开扩展程序页面并开启 **「开发者模式」**。
+3. 点击 **「加载已解压的扩展程序」**，选中解压出的文件夹即可完成安装。
 
 ### 2. 安卓手机 (Kiwi Browser 原生支持)
 1. 在手机上打开 **Kiwi Browser**。

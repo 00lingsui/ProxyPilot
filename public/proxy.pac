@@ -1,5 +1,5 @@
 // ProxyPilot High-Performance GFWList PAC Script
-// Generated at: 2026-11-04T09:08:47.839Z
+// Generated at: 2026-11-04T10:45:41.870Z
 // Source: ProxyPilot Curated Base (4,430+ domains)
 // Rules: 101 proxy domains, 27 whitelist domains
 // Target Proxy: SOCKS5 127.0.0.1:7897; SOCKS 127.0.0.1:7897; DIRECT
