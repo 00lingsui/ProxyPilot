@@ -21,6 +21,7 @@ interface ProxyTakeoverBannerProps {
   onOpenPackager: () => void;
   onOpenDocs: () => void;
   onSelectTab: (tab: 'profiles' | 'inspector' | 'simulator' | 'pac' | 'cloud' | 'backup') => void;
+  onOpenTakeoverGuidance?: () => void;
 }
 
 export const ProxyTakeoverBanner: React.FC<ProxyTakeoverBannerProps> = ({
@@ -29,6 +30,7 @@ export const ProxyTakeoverBanner: React.FC<ProxyTakeoverBannerProps> = ({
   onOpenPackager,
   onOpenDocs,
   onSelectTab,
+  onOpenTakeoverGuidance,
 }) => {
   const [isExtensionContext, setIsExtensionContext] = useState(false);
   const [controlLevel, setControlLevel] = useState<string>('unknown');
@@ -175,12 +177,12 @@ export const ProxyTakeoverBanner: React.FC<ProxyTakeoverBannerProps> = ({
         {/* Right action buttons */}
         <div className="flex items-center gap-2 shrink-0 self-end lg:self-center">
           <button
-            onClick={onOpenPackager}
+            onClick={onOpenTakeoverGuidance || onOpenPackager}
             className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-xs hover:shadow-sm transition-all transform active:scale-95"
             title="一键导出为 Chrome / Edge / Kiwi 扩展"
           >
             <Download className="w-3.5 h-3.5" />
-            <span>导出并真实接管浏览器</span>
+            <span>如何真实接管浏览器？</span>
           </button>
 
           <button

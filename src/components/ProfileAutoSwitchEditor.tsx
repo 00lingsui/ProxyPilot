@@ -22,6 +22,8 @@ interface ProfileAutoSwitchEditorProps {
   onDeleteProfile: (id: string) => void;
   isActive?: boolean;
   onSetActive?: () => void;
+  isExtensionContext?: boolean;
+  onOpenTakeoverGuidance?: () => void;
 }
 
 export const ProfileAutoSwitchEditor: React.FC<ProfileAutoSwitchEditorProps> = ({
@@ -31,6 +33,8 @@ export const ProfileAutoSwitchEditor: React.FC<ProfileAutoSwitchEditorProps> = (
   onDeleteProfile,
   isActive = false,
   onSetActive,
+  isExtensionContext = false,
+  onOpenTakeoverGuidance,
 }) => {
   const [showRuleListEditor, setShowRuleListEditor] = useState(false);
   const [updatingList, setUpdatingList] = useState(false);
@@ -190,25 +194,54 @@ export const ProfileAutoSwitchEditor: React.FC<ProfileAutoSwitchEditorProps> = (
     <div className="space-y-6">
       {/* Proxy Takeover Status Card */}
       {isActive ? (
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-800 text-emerald-900 dark:text-emerald-100 shadow-2xs">
-          <div className="flex items-center gap-2.5">
-            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
-            <div>
-              <div className="font-bold text-xs flex items-center gap-1.5">
-                <span>✅ 当前浏览器正由此自动切换模式接管运行</span>
-                <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-emerald-200 dark:bg-emerald-800 text-emerald-900 dark:text-emerald-200 font-semibold">
-                  ACTIVE
-                </span>
+        isExtensionContext ? (
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-800 text-emerald-900 dark:text-emerald-100 shadow-2xs">
+            <div className="flex items-center gap-2.5">
+              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+              <div>
+                <div className="font-bold text-xs flex items-center gap-1.5">
+                  <span>🟢 浏览器原生底层代理：已真实接管运行</span>
+                  <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-emerald-200 dark:bg-emerald-800 text-emerald-900 dark:text-emerald-200 font-semibold">
+                    ACTIVE
+                  </span>
+                </div>
+                <p className="text-[11px] text-emerald-700 dark:text-emerald-300 mt-0.5">
+                  智能分流 PAC 引擎正在接管 Chrome 网络请求 | {profile.rules.length} 条已启用规则实时匹配
+                </p>
               </div>
-              <p className="text-[11px] text-emerald-700 dark:text-emerald-300 mt-0.5">
-                智能分流 PAC 引擎正在接管 Chrome 网络请求 | {profile.rules.length} 条已启用规则实时匹配
-              </p>
             </div>
+            <span className="self-end sm:self-center text-[11px] font-medium text-emerald-700 dark:text-emerald-300">
+              PAC 智能分流中
+            </span>
           </div>
-          <span className="self-end sm:self-center text-[11px] font-medium text-emerald-700 dark:text-emerald-300">
-            PAC 智能分流中
-          </span>
-        </div>
+        ) : (
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800 text-amber-900 dark:text-amber-100 shadow-2xs">
+            <div className="flex items-center gap-2.5">
+              <span className="w-2.5 h-2.5 rounded-full bg-amber-500 shrink-0" />
+              <div>
+                <div className="font-bold text-xs flex items-center gap-1.5">
+                  <span>🟡 网页端已激活 (Web 模拟沙箱，尚未接管外部浏览器)</span>
+                  <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-amber-200 dark:bg-amber-900 text-amber-900 dark:text-amber-200 font-semibold">
+                    WEB SANDBOX
+                  </span>
+                </div>
+                <p className="text-[11px] text-amber-800 dark:text-amber-300 mt-0.5">
+                  受浏览器安全限制，普通网页无权直接篡改系统/浏览器的代理。需加载扩展插件或配置系统 PAC 才能让浏览器真实按规则自动分流！
+                </p>
+              </div>
+            </div>
+            {onOpenTakeoverGuidance && (
+              <button
+                type="button"
+                onClick={onOpenTakeoverGuidance}
+                className="self-end sm:self-center flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold shadow-xs transition-colors shrink-0"
+              >
+                <Zap className="w-3.5 h-3.5" />
+                <span>如何让浏览器真实按规则分流？</span>
+              </button>
+            )}
+          </div>
+        )
       ) : (
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-xl bg-blue-50/70 dark:bg-slate-800/80 border border-blue-200 dark:border-slate-700 shadow-2xs">
           <div className="flex items-center gap-2.5">
@@ -218,7 +251,7 @@ export const ProfileAutoSwitchEditor: React.FC<ProfileAutoSwitchEditorProps> = (
                 ○ 当前未接管浏览器代理
               </div>
               <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-                自动切换规则已就绪。点击右侧按钮可立即激活并接管 Chrome 底层代理。
+                自动切换规则已就绪。点击右侧按钮可设为当前情景或查看真实接管方式。
               </p>
             </div>
           </div>
@@ -226,10 +259,10 @@ export const ProfileAutoSwitchEditor: React.FC<ProfileAutoSwitchEditorProps> = (
             <button
               onClick={onSetActive}
               className="self-end sm:self-center flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow-xs hover:shadow-sm transition-all transform active:scale-95 shrink-0"
-              title="立即将浏览器代理切换至此自动切换模式"
+              title="切换至此自动切换模式"
             >
               <Zap className="w-3.5 h-3.5" />
-              <span>⚡ 设为当前代理并接管浏览器</span>
+              <span>⚡ 设为当前代理并接管</span>
             </button>
           )}
         </div>

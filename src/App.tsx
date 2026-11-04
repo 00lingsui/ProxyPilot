@@ -34,6 +34,7 @@ import { NewProfileModal } from './components/NewProfileModal';
 import { DocsModal } from './components/DocsModal';
 import { WorkspaceModal } from './components/WorkspaceModal';
 import { SecurityWhitelistModal } from './components/SecurityWhitelistModal';
+import { TakeoverGuidanceModal } from './components/TakeoverGuidanceModal';
 import { DEFAULT_SECURITY_BYPASS } from './utils/securityWhitelist';
 import { testProxyLatency } from './utils/healthCheck';
 import { registerConsoleApi } from './utils/devConsoleApi';
@@ -89,6 +90,21 @@ export default function App() {
   const [isBackupOpen, setIsBackupOpen] = useState(false);
   const [isNewProfileOpen, setIsNewProfileOpen] = useState(false);
   const [isDocsOpen, setIsDocsOpen] = useState(false);
+  const [isTakeoverGuidanceOpen, setIsTakeoverGuidanceOpen] = useState(false);
+
+  const isExtensionContext = typeof window !== 'undefined' && 
+    Boolean((window as any).chrome?.proxy?.settings);
+
+  const handleSetActiveProfile = (id: string) => {
+    setActiveProfileId(id);
+    const target = profiles.find(p => p.id === id);
+    if (!isExtensionContext) {
+      showToast(`网页模拟已激活「${target?.name || id}」(真实接管请加载扩展)`);
+      setIsTakeoverGuidanceOpen(true);
+    } else {
+      showToast(`🚀 已成功切换并接管底层代理: ${target?.name || id}！`);
+    }
+  };
 
   const [isWorkspaceOpen, setIsWorkspaceOpen] = useState(false);
   const [isSecurityOpen, setIsSecurityOpen] = useState(false);
@@ -294,10 +310,7 @@ export default function App() {
         currentTab={currentTab}
         setCurrentTab={setCurrentTab}
         activeProfileId={activeProfileId}
-        setActiveProfileId={(id) => {
-          setActiveProfileId(id);
-          showToast(`当前生效情景已切换至: ${profiles.find(p => p.id === id)?.name}`);
-        }}
+        setActiveProfileId={handleSetActiveProfile}
         profiles={profiles}
         togglePopup={() => setIsPopupOpen(!isPopupOpen)}
         isPopupOpen={isPopupOpen}
@@ -316,6 +329,7 @@ export default function App() {
         onOpenPackager={() => setIsPackagerOpen(true)}
         onOpenDocs={() => setIsDocsOpen(true)}
         onSelectTab={setCurrentTab}
+        onOpenTakeoverGuidance={() => setIsTakeoverGuidanceOpen(true)}
       />
 
       {/* Main Workspace Frame */}
@@ -327,10 +341,7 @@ export default function App() {
             selectedProfileId={selectedProfileId}
             onSelectProfile={setSelectedProfileId}
             activeProfileId={activeProfileId}
-            onSetActiveProfile={(id) => {
-              setActiveProfileId(id);
-              showToast(`🚀 已将「${profiles.find(p => p.id === id)?.name}」设为当前生效代理并接管浏览器！`);
-            }}
+            onSetActiveProfile={handleSetActiveProfile}
             onOpenNewProfileModal={() => setIsNewProfileOpen(true)}
             onOpenBackupModal={() => setIsBackupOpen(true)}
             onOpenDocsModal={() => setIsDocsOpen(true)}
@@ -356,10 +367,9 @@ export default function App() {
                     onChange={handleUpdateProfile}
                     onDeleteProfile={handleDeleteProfile}
                     isActive={selectedProfile.id === activeProfileId}
-                    onSetActive={() => {
-                      setActiveProfileId(selectedProfile.id);
-                      showToast(`🚀 已将「${selectedProfile.name}」设为当前生效代理并接管浏览器！`);
-                    }}
+                    onSetActive={() => handleSetActiveProfile(selectedProfile.id)}
+                    isExtensionContext={isExtensionContext}
+                    onOpenTakeoverGuidance={() => setIsTakeoverGuidanceOpen(true)}
                   />
                 )}
 
@@ -370,10 +380,9 @@ export default function App() {
                     onChange={handleUpdateProfile}
                     onDeleteProfile={handleDeleteProfile}
                     isActive={selectedProfile.id === activeProfileId}
-                    onSetActive={() => {
-                      setActiveProfileId(selectedProfile.id);
-                      showToast(`🚀 已将「${selectedProfile.name}」设为当前生效代理并接管浏览器！`);
-                    }}
+                    onSetActive={() => handleSetActiveProfile(selectedProfile.id)}
+                    isExtensionContext={isExtensionContext}
+                    onOpenTakeoverGuidance={() => setIsTakeoverGuidanceOpen(true)}
                   />
                 )}
 
@@ -383,10 +392,9 @@ export default function App() {
                     onChange={handleUpdateProfile}
                     onDeleteProfile={handleDeleteProfile}
                     isActive={selectedProfile.id === activeProfileId}
-                    onSetActive={() => {
-                      setActiveProfileId(selectedProfile.id);
-                      showToast(`🚀 已将「${selectedProfile.name}」设为当前生效代理并接管浏览器！`);
-                    }}
+                    onSetActive={() => handleSetActiveProfile(selectedProfile.id)}
+                    isExtensionContext={isExtensionContext}
+                    onOpenTakeoverGuidance={() => setIsTakeoverGuidanceOpen(true)}
                   />
                 )}
 
@@ -708,6 +716,17 @@ export default function App() {
           setSecurityConfig(updated);
           localStorage.setItem('proxypilot_sec_bypass', JSON.stringify(updated));
           showToast('隐私安全白名单设置已生效并保存');
+        }}
+      />
+
+      {/* Takeover Guidance Modal */}
+      <TakeoverGuidanceModal
+        isOpen={isTakeoverGuidanceOpen}
+        onClose={() => setIsTakeoverGuidanceOpen(false)}
+        activeProfile={profiles.find(p => p.id === activeProfileId) || profiles[0]}
+        onOpenPackager={() => {
+          setIsTakeoverGuidanceOpen(false);
+          setIsPackagerOpen(true);
         }}
       />
     </div>

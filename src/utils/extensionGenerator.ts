@@ -6,7 +6,7 @@ import { generateOptionsHtml, generateOptionsJs } from './extensionOptionsApp';
 /**
  * Creates a fully functioning, load-unpacked ready Chrome/Edge/Kiwi Manifest V3 extension ZIP
  */
-export async function generateExtensionZip(profiles: Profile[], activeProfileId: string): Promise<Blob> {
+export async function buildExtensionZipObject(profiles: Profile[], activeProfileId: string): Promise<JSZip> {
   const zip = new JSZip();
 
   const activeProfile = profiles.find(p => p.id === activeProfileId) || profiles[0];
@@ -1030,6 +1030,13 @@ document.addEventListener('DOMContentLoaded', async () => {
 祝您使用愉快！
 `;
   zip.file("README.md", readmeMd);
+  return zip;
+}
 
+/**
+ * Generates an in-browser downloadable Blob for the extension ZIP
+ */
+export async function generateExtensionZip(profiles: Profile[], activeProfileId: string): Promise<Blob> {
+  const zip = await buildExtensionZipObject(profiles, activeProfileId);
   return await zip.generateAsync({ type: 'blob' });
 }
